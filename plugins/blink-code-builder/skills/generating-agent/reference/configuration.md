@@ -105,7 +105,7 @@ Each entry:
 | `summarize_output` | `false` | Have the output summarized before the agent reasons on it. Use for large outputs. |
 | `summarize_output_instructions` | `""` | What the summary should keep. Only meaningful with `summarize_output: true`. |
 
-Get `ability_id` from `${CLAUDE_PLUGIN_DATA}/catalog/workspace_actions.tsv`: a `kind=subflow`
+Get `ability_id` from `workspace/workflows/index.tsv`: a `kind=subflow`
 row's `action` column is `automations.<uuid>` — the `ability_id` is that uuid without the
 prefix.
 

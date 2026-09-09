@@ -1,18 +1,19 @@
 #!/usr/bin/env python3
 """Snapshot the workspace's callable actions and connections.
 
-SessionStart hook. Writes <root>/{workspace_actions,connections}.tsv on every session —
-workspace data changes often, so there's no staleness gate here (refresh_catalog.py, the
-vendor catalog, caches for up to 7 days).
+SessionStart hook. Writes workspace/{workflows,agents,connections}/index.tsv in the
+project repo on every session — workspace data changes often, so there's no staleness
+gate here (refresh_catalog.py, the vendor catalog, caches for up to 7 days).
 
 Config: CLAUDE_PLUGIN_OPTION_BLINK_{CONTROLLER_URL,USER_API_KEY,WORKSPACE_ID}.
-Root: ${CLAUDE_PLUGIN_DATA}/catalog/ — must be set (Claude Code injects it).
+Root: workspace/ in the project repo — vendor content stays in
+${CLAUDE_PLUGIN_DATA}/catalog/ (see blink_shared.config).
 """
 
 import sys
 
 from _common import clean_for_tsv
-from blink_shared.config import catalog_root, has_config
+from blink_shared.config import has_config, workspace_root
 from blink_shared.deps import ensure_installed
 
 # A subflow's action name is `automations.<playbook-id>` — exactly what a calling step's
@@ -31,29 +32,34 @@ def should_skip():
 
 
 def workspace_action_rows(collections):
-    """The workspace's own callable actions: published subflows, agents, templates.
+    """The workspace's own callable actions, split into (workflow_rows, agent_rows).
 
-    This is the same catalog the product builds a step from, so appearing in it means the
-    action is callable right now — a subflow shows up only while its workflow is
-    on-demand, published and active, and disappears on deactivation.
+    A workflow row is a subflow or a template action — everything workspace-owned that
+    isn't an agent. This is the same catalog the product builds a step from, so appearing
+    in it means the action is callable right now — a subflow shows up only while its
+    workflow is on-demand, published and active, and disappears on deactivation.
     """
-    rows = []
+    workflow_rows = []
+    agent_rows = []
     for collection in collections:
         for action in collection.get("actions") or []:
             full_name = action.get("full_name") or ""
             is_subflow = full_name.startswith(SUBFLOW_ACTION_PREFIX)
             if not is_subflow and action.get("action_type") not in WORKSPACE_ACTION_TYPES:
                 continue
-            rows.append((
+            kind = "subflow" if is_subflow else (action.get("action_type") or "").lower()
+            row = (
                 full_name,
                 # For a subflow this is the workflow's own name.
                 action.get("display_name") or "",
-                "subflow" if is_subflow else (action.get("action_type") or "").lower(),
+                kind,
                 # Pack name for a subflow, sub-collection for the rest.
                 action.get("category") or "",
                 action.get("description") or "",
-            ))
-    return sorted(rows, key=lambda row: (row[2], row[1]))
+            )
+            (agent_rows if kind == "agent" else workflow_rows).append(row)
+    key = lambda row: (row[2], row[1])
+    return sorted(workflow_rows, key=key), sorted(agent_rows, key=key)
 
 
 def write_tsv(path, header, rows):
@@ -67,19 +73,26 @@ def refresh():
     from blink_shared.client import build_client, raise_for_status
     from blink_shared.connections import fetch_connections
 
-    catalog_dir = catalog_root()
-    catalog_dir.mkdir(parents=True, exist_ok=True)
+    workspace_dir = workspace_root()
+    workflows_dir = workspace_dir / "workflows"
+    agents_dir = workspace_dir / "agents"
+    connections_dir = workspace_dir / "connections"
+    for directory in (workflows_dir, agents_dir, connections_dir):
+        directory.mkdir(parents=True, exist_ok=True)
 
     with build_client(timeout=30) as client:
         collections = raise_for_status(client.get("/actions", params={"q": ACTIONS_QUERY})).json()
-        actions = workspace_action_rows(collections.get("collections") or [])
+        workflow_rows, agent_rows = workspace_action_rows(collections.get("collections") or [])
         connections = fetch_connections(client)
 
-    write_tsv(catalog_dir / "workspace_actions.tsv", "# action\tname\tkind\tcategory\tdescription", actions)
-    write_tsv(catalog_dir / "connections.tsv", "# name\ttype_name", connections)
+    action_header = "# action\tname\tkind\tcategory\tdescription"
+    write_tsv(workflows_dir / "index.tsv", action_header, workflow_rows)
+    write_tsv(agents_dir / "index.tsv", action_header, agent_rows)
+    write_tsv(connections_dir / "index.tsv", "# name\ttype_name", connections)
 
     print(
-        f"ok: {len(actions)} workspace actions, {len(connections)} connections -> {catalog_dir}",
+        f"ok: {len(workflow_rows)} workflow actions, {len(agent_rows)} agent actions, "
+        f"{len(connections)} connections -> {workspace_dir}",
         file=sys.stderr,
     )
 

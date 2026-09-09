@@ -300,8 +300,8 @@ def fetch_agent(ref, stdout=False, output=""):
     """Download an agent from the workspace and write it as local YAML.
 
     Gets an agent id or an agent-builder URL. Returns the YAML text if `stdout`, else a
-    summary of the file it wrote (`output`, or agents/<name>.yaml). Fetches the draft
-    version, since that is what save_agent writes back.
+    summary of the file it wrote (`output`, or workspace/agents/<name>.yaml). Fetches the
+    draft version, since that is what save_agent writes back.
     """
     api = build_client()
     agent_id = _resolve_agent_ref(ref)
@@ -319,7 +319,7 @@ def fetch_agent(ref, stdout=False, output=""):
         return yaml_text
 
     out_path = (Path(output) if output
-                else Path("agents") / f"{_safe_filename(config.name, agent_id)}.yaml")
+                else Path("workspace/agents") / f"{_safe_filename(config.name, agent_id)}.yaml")
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(yaml_text)
 

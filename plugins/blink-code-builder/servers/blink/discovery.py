@@ -19,13 +19,13 @@ MATCH_NONE = "none"
 
 
 def fetch_automation(ref, stdout=False, output=""):
-    """Pull an existing Blink playbook out of the workspace into automations/ as YAML.
+    """Pull an existing Blink playbook out of the workspace into workspace/workflows/ as YAML.
 
     This is the entry point for *revising a workflow that lives in Blink* (e.g. one
     authored in the UI). It accepts a playbook id OR a Blink editor URL
     (https://.../workflow/<id>/edit), writes the playbook YAML to
-    automations/<name>.yaml, and records the id in the shared name->id cache so the
-    next `save_automation` call updates this same playbook in place instead of
+    workspace/workflows/<name>.yaml, and records the id in the shared name->id cache so
+    the next `save_automation` call updates this same playbook in place instead of
     creating a duplicate.
 
     Config: CLAUDE_PLUGIN_OPTION_BLINK_{CONTROLLER_URL,USER_API_KEY,WORKSPACE_ID}.
@@ -51,7 +51,7 @@ def fetch_automation(ref, stdout=False, output=""):
     if stdout:
         return yaml_text
 
-    out_path = Path(output) if output else Path("automations") / f"{name}.yaml"
+    out_path = Path(output) if output else Path("workspace/workflows") / f"{name}.yaml"
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(yaml_text)
 
@@ -60,6 +60,31 @@ def fetch_automation(ref, stdout=False, output=""):
         f"name: {name}\n"
         "note: save_automation will update this playbook in place (id cached)."
     )
+
+
+def list_workflows():
+    """List every workflow (playbook) in the workspace, drafts included.
+
+    Takes nothing; returns `<id>\\t<name>` lines plus a total. workspace/workflows/index.tsv
+    lists only callable (published, active, on_demand) workflows, so this is the only way
+    to see a draft, or a scheduled/event workflow that isn't itself callable as a subflow.
+
+    NOTE: unlike list_agents, this has no draft/published state column. GET /automations
+    (packs[].automations[]) hasn't been confirmed to carry a per-automation publish-state
+    field the way GET /agents rows do (is_published/has_unpublished_changes) — verify
+    against a live response before relying on one.
+    """
+    with build_client() as api:
+        packs = list_packs(api)
+
+    lines = ["# id\tname"]
+    total = 0
+    for pack in packs:
+        for automation in pack.get("automations") or []:
+            lines.append(f"{automation.get('id')}\t{automation.get('name') or ''}")
+            total += 1
+    lines.append(f"total: {total}")
+    return "\n".join(lines)
 
 
 def _discover_playbook_id(api: httpx.Client, explicit_id: str) -> str:

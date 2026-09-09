@@ -45,8 +45,17 @@ def require_env():
 
 
 def catalog_root():
-    """Where the vendor catalog and the workspace snapshots are cached."""
+    """Where the vendor catalog is cached — generic Blink capability, same for every
+    workspace. This user's own workspace content (workflows, agents, connections,
+    tables) lives in the project repo instead — see workspace_root()."""
     return Path(os.environ["CLAUDE_PLUGIN_DATA"]) / "catalog"
+
+
+def workspace_root():
+    """Where this user's own Blink workspace content is cached, inside the project repo —
+    workflows/subflows, agents, connections, tables. Mirrors catalog_root(), but for
+    workspace-owned data rather than the generic vendor catalog."""
+    return Path("workspace")
 
 
 def workspace_base_url():
