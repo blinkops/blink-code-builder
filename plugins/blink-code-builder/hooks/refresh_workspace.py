@@ -6,8 +6,7 @@ project repo on every session — workspace data changes often, so there's no st
 gate here (refresh_catalog.py, the vendor catalog, caches for up to 7 days).
 
 Config: CLAUDE_PLUGIN_OPTION_BLINK_{CONTROLLER_URL,USER_API_KEY,WORKSPACE_ID}.
-Root: workspace/ in the project repo — vendor content stays in
-${CLAUDE_PLUGIN_DATA}/catalog/ (see blink_shared.config).
+Root: workspace/ in the project repo.
 """
 
 import sys
@@ -34,10 +33,8 @@ def should_skip():
 def workspace_action_rows(collections):
     """The workspace's own callable actions, split into (workflow_rows, agent_rows).
 
-    A workflow row is a subflow or a template action — everything workspace-owned that
-    isn't an agent. This is the same catalog the product builds a step from, so appearing
-    in it means the action is callable right now — a subflow shows up only while its
-    workflow is on-demand, published and active, and disappears on deactivation.
+    A workflow row is a subflow (a published, active workflow) or a template action —
+    everything workspace-owned that isn't an agent.
     """
     workflow_rows = []
     agent_rows = []
