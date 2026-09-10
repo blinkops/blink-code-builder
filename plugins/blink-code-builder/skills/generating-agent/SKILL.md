@@ -36,24 +36,27 @@ attach it.
 ## Where everything lives
 
 ```
-Your repo                      ${CLAUDE_PLUGIN_DATA}/catalog        Blink workspace
-─────────────────────────      ────────────────────────────        ──────────────────────
-agents/                        workspace_actions.tsv               name, title, pack
-  alert-triage.yaml    ◄──────►   kind=agent   → agents.<id>       role, abilities…
-                                  kind=subflow → automations.<id>       draft  ← save_agent
-automations/                                                            published ← publish_agent
-  enrich-observable.yaml ◄────► connections.tsv                    playbooks           (workflows)
-                                                                   actions             (agents.<id> row,
-                                 refreshed: session start,                              created on publish)
-                                 after every publish
+Your repo (workspace/)                                    Blink workspace
+──────────────────────────────────────────────────────    ──────────────────────
+agents/index.tsv          kind=agent   → agents.<id>       agent record        (name, title, pack)
+agents/alert-triage.yaml  ◄────────────────────────►       agent version       (role, abilities…)
+workflows/index.tsv       kind=subflow → automations.<id>       draft  ← save_agent
+workflows/enrich-observable.yaml ◄─────────────────►             published ← publish_agent
+connections/index.tsv                                      playbooks           (workflows)
+                                                            actions             (agents.<id> row,
+  refreshed: session start, after every publish                                 created on publish)
 
   you edit ──► validate_agent ──► save_agent ──► publish_agent ──► callable from a workflow
                   (local)          (draft)        (live)
 ```
 
+The vendor catalog (`actions.tsv`/`triggers.tsv`, generic across every workspace) still lives
+in `${CLAUDE_PLUGIN_DATA}/catalog/` — only this user's own workspace content (above) is
+in the project repo, under `workspace/`.
+
 ## Configuration
 
-One file per agent in `agents/`. Only `name` and `role` are required.
+One file per agent in `workspace/agents/`. Only `name` and `role` are required.
 
 | Key | Meaning |
 |---|---|
@@ -93,7 +96,7 @@ abilities:
 
 Two sources, in this order:
 
-1. **`workspace_actions.tsv`** (`kind=agent` rows) — free to grep, but **published agents only**.
+1. **`workspace/agents/index.tsv`** — free to grep, but **published agents only**.
 2. **`list_agents`** — one call, every agent including drafts, each with its state:
    `draft` (never published), `published` (live, draft matches it), `modified`
    (live, but the draft has newer edits that are not published yet).
@@ -103,14 +106,14 @@ A draft agent is invisible in the catalog by design.
 
 ## Creating an agent
 
-1. **Decide the abilities first.** Grep `${CLAUDE_PLUGIN_DATA}/catalog/workspace_actions.tsv`
+1. **Decide the abilities first.** Grep `workspace/workflows/index.tsv`
    for `kind=subflow` rows — those are the workspace's callable workflows and the only
    eligible abilities. The `action` column is `automations.<uuid>`; the `ability_id` is that
    uuid **without** the prefix.
 2. **Any ability that doesn't exist yet?** Author and publish that workflow first with the
    `generating-workflow` skill — full loop, including its own test run. It is not attachable
    until it is published.
-3. **Write `agents/<name>.yaml`.** Spend the effort on `role`; read
+3. **Write `workspace/agents/<name>.yaml`.** Spend the effort on `role`; read
    [reference/configuration.md](reference/configuration.md) before writing it.
 4. **`validate_agent`** with `path`. Clear every `[ERROR]`. Report `[WARN]` lines to the user
    rather than silently fixing them.
@@ -152,7 +155,7 @@ then the agent, then the calling workflow. Say which order you're taking and why
       {"verdict": "malicious", "confidence": "80%"}
 ```
 
-- Always copy the `action` string from `workspace_actions.tsv`. Never assemble it by hand,
+- Always copy the `action` string from `workspace/agents/index.tsv`. Never assemble it by hand,
   never call an agent by name.
 - Output is at `{{ steps.S3.output.agent_output }}`.
 - Optional advanced inputs: `roles_and_constraints` (extra instructions for this run only —
@@ -163,8 +166,9 @@ then the agent, then the calling workflow. Say which order you're taking and why
 
 ## Editing an agent
 
-1. **Already in `agents/`?** Read it. **Lives only in Blink?** `fetch_agent` with `ref` (the
-   agent id or an agent-builder URL) — it writes `agents/<name>.yaml`. Don't have the id? See
+1. **Already in `workspace/agents/`?** Read it. **Lives only in Blink?** `fetch_agent` with `ref`
+   (the agent id or an agent-builder URL) — it writes `workspace/agents/<name>.yaml`. Don't
+   have the id? See
    **Finding an agent** above.
 2. Edit that file in place. Same filename, same `name:`. Never create `_v2.yaml`.
 3. `validate_agent`, then `save_agent`.
@@ -183,7 +187,7 @@ then the agent, then the calling workflow. Say which order you're taking and why
 | An ability has `auto_approved: true`, or `modes.code_execution_enabled` is on | `[WARN]` at validate, `[BLOCKED SAFETY]` at publish | Describe each flagged point and who it affects, ask a direct yes/no, then re-call with `acknowledge_risks: true`. Never carries to the next publish. |
 | An agent with this `name:` already exists | `[BLOCKED EXISTS]` from save/publish | Never force it. Either `fetch_agent` + re-call with `agent_id` (editing that agent), or rename in the YAML (separate agent). |
 | An ability's workflow itself calls an agent | nothing local | The controller enforces the depth limit of 5 at run time and errors if exceeded, so a cycle stops itself. Mention it if the user is designing deep chains. |
-| User names an agent that isn't in `workspace_actions.tsv` | It's probably a draft — drafts aren't in the catalog | Call `list_agents` to find it, then `fetch_agent` by id. Tell the user it must be published before a workflow can call it. Never invent an id, never say it doesn't exist without checking `list_agents`. |
+| User names an agent that isn't in `workspace/agents/index.tsv` | It's probably a draft — drafts aren't in the catalog | Call `list_agents` to find it, then `fetch_agent` by id. Tell the user it must be published before a workflow can call it. Never invent an id, never say it doesn't exist without checking `list_agents`. |
 | A workflow was published in the UI this session | The catalog snapshot is stale, so the grep misses | Nothing — validation falls back to a live lookup before reporting anything. |
 | Two agents with the same name | Can't happen — names are unique per workspace | Saving matches by name and updates in place; re-saving an edited file never duplicates. |
 | Agent has `knowledge:` files or an avatar | Preserved on fetch, never removed on save, cannot be created here | Ask the user to upload them in the agent builder. **Never copy a `knowledge:` block from another agent** — the attachment is one shared row, and publishing the original agent can delete it out from under this one. |

@@ -48,7 +48,7 @@ new steps, but recognize `system.Table*` steps in a workflow you're revising.
 ## Look up the table before writing to it
 
 Never guess a column name or type. Before drafting any step that reads or writes a
-Table, read `tables/tables-schema.yaml` in the user's repo — one entry per table, with
+Table, read `workspace/tables/schema.yaml` in the user's repo — one entry per table, with
 its columns, types, and required/unique/reference flags. If the file is missing, or its
 modified time (check with `stat` / `ls -la`) is more than 24h old, or the user mentioned
 changing a table this session, call the `get_tables_schema` tool first to regenerate it
@@ -90,7 +90,7 @@ keep piling up rows in the real table. Mitigate:
   it at the real table before publishing — there's no validation error today that
   catches a leftover scratch-table reference.
 
-Also: `row_count` in `tables/tables-schema.yaml` is Postgres's approximate live-tuple
+Also: `row_count` in `workspace/tables/schema.yaml` is Postgres's approximate live-tuple
 estimate, not an exact count — good for "roughly empty vs. huge," not for a delete
 condition that needs to match an exact number of rows (run a live `GetRecordsV3` for
 that instead).

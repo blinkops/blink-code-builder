@@ -50,7 +50,7 @@ Keep the id from the save/publish response — that's what the parent references
     <input_name>: <value>
 ```
 
-- Always reference by **uuid**, never by name. The `action` column of a `kind=subflow` row in `workspace_actions.tsv` is that exact string — copy it, don't assemble it by hand.
+- Always reference by **uuid**, never by name. The `action` column of a `kind=subflow` row in `workspace/workflows/index.tsv` is that exact string — copy it, don't assemble it by hand.
 - `inputs:` come from the subflow's own declared top-level `inputs:` — check `fetch_automation` or the catalog if unsure.
 - The calling step normally needs **no `connections:` block** — the subflow's internal steps carry their own connections. If the subflow declares an input of `type: connections`, pass the connection's **name** as a regular input value.
 - The subflow's output is available at `{{ steps.<id>.output }}` — sync calls only.
@@ -73,7 +73,7 @@ Then run the parent through the same loop: validate → save → test → publis
 
 This is the part that silently goes wrong, so decide it explicitly for every subflow call:
 
-| State of the target workflow | In `workspace_actions.tsv`? | Can the parent call it? |
+| State of the target workflow | In `workspace/workflows/index.tsv`? | Can the parent call it? |
 |---|---|---|
 | Published + active, on-demand | yes (`kind=subflow`) | **Yes** — the step runs the **published** version by default |
 | Saved as a draft, never published | no | **No.** The `automations.<uuid>` action does not exist yet, so the step cannot even reference it. `run_draft: true` does not help here |
@@ -85,7 +85,7 @@ Rules that follow from that:
 - **Publish the subflow once before the parent references it.** Publishing (= activating an on-demand workflow) is what creates the callable action; that is the whole point of step 5 in "Creating a subflow".
 - After it exists, `run_draft: true` on the parent's step runs the subflow's **current draft** instead of the published version. Use it only to test a change to the subflow before publishing it, and say so to the user — leaving `run_draft: true` in a workflow you hand over means production traffic runs unpublished code. Remove it before the final publish.
 - **If you changed the subflow's `inputs:`, publish the subflow again** before the parent passes the new input. The callable action's parameter list is regenerated from the published workflow, so an unpublished new input is not part of it yet.
-- **No row in `workspace_actions.tsv` = not callable, and that's the only local signal you get** — drafts are not listed anywhere locally. So when the user points at a workflow you can't find there, don't assume it's missing: `fetch_automation` it (id or editor URL), then tell the user it has to be published before a parent can call it, and ask. Never work around it by calling it by name or inventing an id.
+- **No row in `workspace/workflows/index.tsv` = not callable, and that's the only local signal you get** — drafts are not listed anywhere locally. So when the user points at a workflow you can't find there, don't assume it's missing: `fetch_automation` it (id or editor URL), then tell the user it has to be published before a parent can call it, and ask. Never work around it by calling it by name or inventing an id.
 
 ## Sync vs async
 
@@ -100,16 +100,17 @@ If the request doesn't make the choice obvious, ask the user.
 
 ### Where to look
 
-- `${CLAUDE_PLUGIN_DATA}/catalog/workspace_actions.tsv` — the workspace's callable actions (`action`, `name`, `kind`, `category`, `description`). A `kind=subflow` row is callable right now, and its `action` column is the exact `automations.<uuid>` string to put in the step. `kind=agent` / `kind=template` rows are the workspace's other own actions — same thing, callable as a step.
-- `${CLAUDE_PLUGIN_DATA}/catalog/connections.tsv` — every connection (`name`, `type_name`).
+- `workspace/workflows/index.tsv` — the workspace's callable workflows and templates (`action`, `name`, `kind`, `category`, `description`). A `kind=subflow` row is callable right now, and its `action` column is the exact `automations.<uuid>` string to put in the step. `kind=template` rows are the workspace's other own actions — same thing, callable as a step.
+- `workspace/agents/index.tsv` — same columns, for published agents (`kind=agent`).
+- `workspace/connections/index.tsv` — every connection (`name`, `type_name`).
 
-Grep these first; only call `fetch_automation` / `list_connections` live when you need more detail. Drafts have no local listing — see the last rule of the draft-vs-published section. You don't need one to avoid duplicates: `save_automation` matches the name live across all packs and updates that workflow in place.
+Grep these first; only call `fetch_automation` / `list_connections` live when you need more detail. Drafts have no local listing (the `list_workflows` tool covers that live) — see the last rule of the draft-vs-published section. You don't need one to avoid duplicates: `save_automation` matches the name live across all packs and updates that workflow in place.
 
 ### Reuse only on a real match — otherwise build a new one
 
 A name that looks close is **not** a match. Reusing the wrong workflow is worse than writing a new one: it silently changes what the user's automation does, and its inputs/outputs may not fit at all.
 
-1. Grep `workspace_actions.tsv` for candidates by name/description.
+1. Grep `workspace/workflows/index.tsv` for candidates by name/description.
 2. For each serious candidate, `fetch_automation` and **read it** — what it actually does, its `inputs:`, what it returns, which connections it uses, and any side effect (it writes a ticket, sends mail, deletes something).
 3. Reuse it only if it does **exactly** what this step needs, and its inputs cover what you have to pass. Partly-right is not right.
 4. If it doesn't fit, say so in one line ("`Enrich User` only looks up AD, not Okta — building a new subflow") and author a new workflow instead. Do **not** edit an existing active subflow to make it fit — other parents may call it, and those callers are not visible from here.

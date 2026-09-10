@@ -6,25 +6,30 @@ If the catalog is missing or empty when you go to look something up, stop and te
 
 ## Where it lives
 
-`${CLAUDE_PLUGIN_DATA}/catalog/` (Claude Code injects `CLAUDE_PLUGIN_DATA` per plugin).
+Vendor catalog (same for every workspace): `${CLAUDE_PLUGIN_DATA}/catalog/` (Claude Code
+injects `CLAUDE_PLUGIN_DATA` per plugin). This user's own workspace content (workflows,
+agents, connections) lives in the project repo instead, under `workspace/` — see Layout.
 
 ## Layout
 
 ```
-catalog/
+catalog/                                # vendor, same for every workspace
 ├── actions.tsv                        # greppable: full_name <TAB> service <TAB> description <TAB> connection_types
 ├── triggers.tsv                       # greppable: full_name <TAB> service <TAB> description
-├── connections.tsv                    # greppable: name <TAB> type_name — the workspace's bound connections
-├── workspace_actions.tsv              # greppable: action <TAB> name <TAB> kind <TAB> category <TAB> description — the workspace's own callable actions (subflows, agents, templates)
 ├── actions/<service>/<name>.json      # one action's full detail
 └── triggers/<service>/<name>.json     # one trigger's full detail
+
+workspace/                              # this workspace's own content, in the project repo
+├── workflows/index.tsv                # greppable: action <TAB> name <TAB> kind <TAB> category <TAB> description — callable subflows + templates
+├── agents/index.tsv                   # same columns — callable (published) agents
+└── connections/index.tsv              # greppable: name <TAB> type_name — the workspace's bound connections
 ```
 
 `connection_types` in `actions.tsv` is a comma-separated list of the connection types the action requires (empty string if none). Use it to pre-filter candidates at grep-time — **no need to read the action's JSON solely to discover its connection type**.
 
-`connections.tsv` and `workspace_actions.tsv` are workspace snapshots, not vendor catalog data — refreshed every session (no staleness gate), unlike `actions.tsv`/`triggers.tsv` which can lag up to 7 days. Use `connections.tsv` to pick a connection name for a step (see [../SKILL.md](../SKILL.md) — Connections). Use `workspace_actions.tsv` for what a step can call **right now** — every row in it is active and callable, and the `action` column is the exact string to put in a step's `action:`.
+`workspace/connections/index.tsv`, `workspace/workflows/index.tsv`, and `workspace/agents/index.tsv` are workspace snapshots, not vendor catalog data — refreshed every session (no staleness gate), unlike `actions.tsv`/`triggers.tsv` which can lag up to 7 days. Use `workspace/connections/index.tsv` to pick a connection name for a step (see [../SKILL.md](../SKILL.md) — Connections). Use `workspace/workflows/index.tsv` / `workspace/agents/index.tsv` for what a step can call **right now** — every row in them is active and callable, and the `action` column is the exact string to put in a step's `action:`.
 
-`workspace_actions.tsv` lists only what is **callable**, so an unpublished draft is not in it — and there is no local list of drafts. If the user points at a workflow that isn't there, get it with `fetch_automation` (id or editor URL) instead of guessing. You never need a draft list to avoid duplicates: `save_automation` looks the name up live across all packs and updates that workflow in place.
+These index files list only what is **callable**, so an unpublished draft is not in them — and there is no local list of drafts (the `list_workflows` / `list_agents` tools cover that live). If the user points at a workflow that isn't there, get it with `fetch_automation` (id or editor URL) instead of guessing. You never need a draft list to avoid duplicates: `save_automation` looks the name up live across all packs and updates that workflow in place.
 
 ## Lookup flow
 
@@ -135,7 +140,7 @@ Flow-control and built-ins live under the `internal` and `core` services: `core.
 
 ## Calling another workflow
 
-To call another workflow as a step, don't look it up here — there's no `playbooks.<name>` action. Grep `${CLAUDE_PLUGIN_DATA}/catalog/workspace_actions.tsv` for `kind=subflow` rows and copy the `action` column (`automations.<uuid>`) straight into the step. No row for the workflow you want means it isn't callable yet (draft, deactivated, or not on-demand) — see the `subflows` skill: publish it first, and never call it by name.
+To call another workflow as a step, don't look it up here — there's no `playbooks.<name>` action. Grep `workspace/workflows/index.tsv` for `kind=subflow` rows and copy the `action` column (`automations.<uuid>`) straight into the step. No row for the workflow you want means it isn't callable yet (draft, deactivated, or not on-demand) — see the `subflows` skill: publish it first, and never call it by name.
 
 ## When lookup fails
 

@@ -38,7 +38,7 @@ After `[OK]`, the tool's returned text includes either `Test run readiness: READ
 | `step <id>: missing \`action\`` | Step has no action reference. | Look up the intended action via [looking-up-actions.md](looking-up-actions.md). Never invent action names. |
 | `duplicate step id '<x>'` | Two steps share an id. | Re-number so every id in the flattened workflow is unique. |
 | `action '<full_name>' not in catalog. Did you mean: <a>, <b>, <c>?` | Action name typo or wrong service prefix. | Read the suggested action files (parallel reads), pick one, copy the exact `full_name`. If none match, re-grep `actions.tsv` by capability. |
-| `action 'automations.<uuid>' is not callable in this workspace` | No such row in `workspace_actions.tsv`. Either the uuid is wrong/deleted, or the target workflow is a draft, deactivated, or not `on_demand` — none of those are callable as a subflow. | Take the `action` column of a `kind=subflow` row in `workspace_actions.tsv`, or `fetch_automation` the intended workflow and ask the user to publish/activate it. Never invent an id. See [subflows/SKILL.md](../../subflows/SKILL.md). |
+| `action 'automations.<uuid>' is not callable in this workspace` | No such row in `workspace/workflows/index.tsv`. Either the uuid is wrong/deleted, or the target workflow is a draft, deactivated, or not `on_demand` — none of those are callable as a subflow. | Take the `action` column of a `kind=subflow` row in `workspace/workflows/index.tsv`, or `fetch_automation` the intended workflow and ask the user to publish/activate it. Never invent an id. See [subflows/SKILL.md](../../subflows/SKILL.md). |
 | `input '<x>' missing` (required) | A required parameter wasn't supplied. | Re-read the action JSON for its `parameters[]`. Supply a value or **ask the user** — don't fabricate. |
 | `input <name>=<v> not in options [...]` | Value doesn't match the parameter's enum. | Pick one of the listed options verbatim (case matters). |
 | `input <name> references unknown step id '<x>'` | `{{ steps.Sx.output }}` refers to a step that doesn't exist. | Correct the id. Remember flow-control children have their own ids. |
@@ -58,12 +58,12 @@ Never leave an unvalidated YAML in the user's repo.
 
 1. Draft to `/tmp/<name>.yaml` (scratch).
 2. Call `validate_automation` against the scratch file.
-3. On `[OK]` → promote the file to `automations/<name>.yaml`, then call `save_automation`.
+3. On `[OK]` → promote the file to `workspace/workflows/<name>.yaml`, then call `save_automation`.
 4. On `[ERROR]` → read **all** error lines (they surface together), apply fixes in one pass, re-call. Cap at **3 iterations**.
 5. On `[CATALOG MISSING]` → for a new automation, stop and ask the user to check `userConfig` and `${CLAUDE_PLUGIN_DATA}/refresh.log`; don't try to recover from inside the skill. For a code-only revision, re-call with `allow_missing_catalog: true` and continue.
 6. If iteration 4 would start (genuine YAML errors the validator keeps rejecting), stop. Report the last errors and what you tried. Don't keep guessing.
 
-For revisions on an **existing** automation: draft the edit into `/tmp/`, validate there, and only overwrite `automations/<name>.yaml` once `[OK]`. Don't echo the new YAML in your response — the user reviews via `git diff`.
+For revisions on an **existing** automation: draft the edit into `/tmp/`, validate there, and only overwrite `workspace/workflows/<name>.yaml` once `[OK]`. Don't echo the new YAML in your response — the user reviews via `git diff`.
 
 ## Input format
 

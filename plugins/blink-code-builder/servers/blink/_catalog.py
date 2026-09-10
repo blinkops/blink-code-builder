@@ -1,41 +1,62 @@
-"""Reads of workspace_actions.tsv, shared by agents.py and pipeline.py so the file has one parser.
+"""Reads of workspace/{workflows,agents}/index.tsv, shared by agents.py and pipeline.py so
+each file has one parser.
 
-The SessionStart hook (refresh_workspace.py) writes this file every session; it lists every
-action this workspace can call right now — published agents, published subflows, templates.
-Imported by the sibling modules in this directory.
+The SessionStart hook (refresh_workspace.py) writes these files every session; together
+they list every action this workspace can call right now — published agents, published
+subflows, templates. Imported by the sibling modules in this directory.
 """
 
 from typing import NamedTuple
 
-from blink_shared.config import catalog_root
+from blink_shared.config import workspace_root
 
 _AGENT_ACTION_PREFIX = "agents."
 _SUBFLOW_ACTION_PREFIX = "automations."
 
 
 class CatalogRow(NamedTuple):
-    """One row of workspace_actions.tsv — one action this workspace can call."""
+    """One row of workspace/workflows/index.tsv or workspace/agents/index.tsv."""
     action: str   # "agents.<id>", "automations.<id>"
     name: str     # display name; for an agent it is "<name> | <title>"
     kind: str     # "agent", "subflow", or a vendor kind
 
 
-def read_workspace_actions():
-    """Read workspace_actions.tsv. Returns its rows as CatalogRow tuples, or None if the file
-    is absent — callers that can't verify without it must skip rather than false-flag."""
+def _read_index(relative_path):
+    """Read one workspace index.tsv. Returns its rows as CatalogRow tuples, or None if the
+    file is absent — callers that can't verify without it must skip rather than false-flag."""
     try:
-        path = catalog_root() / "workspace_actions.tsv"
-        lines = path.read_text().splitlines()
-    except (OSError, KeyError):
+        lines = (workspace_root() / relative_path).read_text().splitlines()
+    except OSError:
         return None
     rows = []
-    for line in lines[1:]: # skip the header
+    for line in lines[1:]:  # skip the header
         if not line.strip():
             continue
         cells = line.split("\t")
         if len(cells) >= 3:
             rows.append(CatalogRow(*cells[:3]))
     return rows
+
+
+def read_workspace_workflows():
+    """Read workspace/workflows/index.tsv — callable subflows and templates."""
+    return _read_index("workflows/index.tsv")
+
+
+def read_workspace_agents():
+    """Read workspace/agents/index.tsv — published agents."""
+    return _read_index("agents/index.tsv")
+
+
+def read_workspace_actions():
+    """Every callable workspace action — workflows and agents combined. Returns None only
+    if both files are absent; one missing file degrades to just the other's rows, since
+    the two are written independently and either one succeeding is still useful signal."""
+    workflows = read_workspace_workflows()
+    agents = read_workspace_agents()
+    if workflows is None and agents is None:
+        return None
+    return (workflows or []) + (agents or [])
 
 
 def catalog_subflow_ids(rows):

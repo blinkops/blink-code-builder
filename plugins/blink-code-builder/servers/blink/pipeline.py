@@ -29,14 +29,14 @@ DEFAULT_PACK = "blink-code-builder"
 MESSAGE_SEPARATOR = b"%%%%_____________%%%%BLINK_MESSAGE%%%%_____________%%%%"
 END_EXECUTION_COMMAND = "EndExecution"
 MAX_WAIT_SECONDS = 600
-ALLOWLIST_PATH = Path("automations/connections-allowlist.yaml")
+ALLOWLIST_PATH = Path("workspace/workflows/connections-allowlist.yaml")
 
 AUTOMATION_TYPES = {"on_demand", "scheduled", "event"}
 # A step whose action is `automations.<playbook-uuid>` calls another workflow (a subflow).
 SUBFLOW_ACTION_PREFIX = "automations."
 # A published agent gets its own action, `agents.<agent-id>`. Like a subflow it is created at
 # publish time and exists only in the workspace, so it is never in the vendor catalog — and
-# workspace_actions.tsv carries no parameter list, so the generic parameter checks can't run on
+# the workspace index carries no parameter list, so the generic parameter checks can't run on
 # an agent step. These two constants encode what the catalog can't tell us: the inputs below are
 # the built-in run-agent action's, which every published agent's action is cloned from (minus its
 # `agent_id` parameter, which the clone pins).
@@ -554,7 +554,7 @@ def _validate_triggers(automation, triggers_catalog):
 def _validate_agent_step_inputs(step):
     """Check an `agents.<uuid>` step's inputs against the RunAgent contract.
 
-    Needed because workspace_actions.tsv has no parameter list, so `_check_step_readiness`
+    Needed because the workspace index has no parameter list, so `_check_step_readiness`
     can't see that `task` is required — a step missing it would otherwise be reported READY
     and then fail at run time. Unknown names are only a warning: if the action ever gains a
     parameter, a stale list here must not block a valid workflow.
@@ -586,9 +586,10 @@ def _validate_workspace_action_call(step, action_name, workspace_actions):
     """`automations.<uuid>` (subflow) and `agents.<uuid>` (agent) steps call something the
     workspace owns. Neither is ever reliable to check against the vendor actions catalog —
     both actions are created at publish time and the vendor catalog can lag up to 7 days —
-    so check workspace_actions.tsv instead, which the SessionStart hook refreshes every
-    session and again after every publish. Presence there *is* callability: the controller
-    exposes these actions only while the target is published and active."""
+    so check the workspace index instead (workspace/workflows/index.tsv,
+    workspace/agents/index.tsv), which the SessionStart hook refreshes every session and
+    again after every publish. Presence there *is* callability: the controller exposes
+    these actions only while the target is published and active."""
     if workspace_actions is None:
         return []  # workspace snapshot unavailable: can't verify, don't false-flag
     if action_name in workspace_actions:
@@ -598,14 +599,14 @@ def _validate_workspace_action_call(step, action_name, workspace_actions):
             f"[ERROR] step {step.get('id')}: agent {action_name!r} is not callable in this "
             "workspace. Either the id is wrong, or the agent has never been published — an "
             "agent becomes callable only when published. Copy the `action` column of a "
-            "kind=agent row in workspace_actions.tsv, or publish the agent first "
+            "kind=agent row in workspace/agents/index.tsv, or publish the agent first "
             "(see the generating-agent skill)."
         ]
     return [
         f"[ERROR] step {step.get('id')}: action {action_name!r} is not callable in this workspace. "
         "Either the id is wrong, or the target workflow isn't published and active — only a "
         "published, active on_demand workflow is callable as a subflow. Copy the `action` column "
-        "of a kind=subflow row in workspace_actions.tsv, or publish the target workflow first."
+        "of a kind=subflow row in workspace/workflows/index.tsv, or publish the target workflow first."
     ]
 
 
@@ -1266,7 +1267,7 @@ def trigger_test_run(playbook_id, acknowledge_risks=False):
 
     Before opening the run, three gates (a test run is NOT a dry run — it executes real
     actions against real systems, see reference/safety.md):
-      1. Connections allowlist (`automations/connections-allowlist.yaml`, a YAML list of
+      1. Connections allowlist (`workspace/workflows/connections-allowlist.yaml`, a YAML list of
          connection names). Any step-level connection not on the list → `[BLOCKED
          CONNECTIONS]` block so the SKILL flow can offer to extend the allowlist.
       2. Human-wait scan. A step that waits for a human (internal.Sleep with

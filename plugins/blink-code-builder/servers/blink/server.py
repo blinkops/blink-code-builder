@@ -27,8 +27,18 @@ def _list_connections() -> str:
 
 @mcp.tool(name="fetch_automation")
 def _fetch_automation(ref: str, stdout: bool = False, output: str = "") -> str:
-    """Pull an existing Blink playbook (by id or editor URL) into automations/ as YAML."""
+    """Pull an existing Blink playbook (by id or editor URL) into workspace/workflows/ as YAML."""
     return discovery.fetch_automation(ref, stdout=stdout, output=output)
+
+
+@mcp.tool(name="list_workflows")
+def _list_workflows() -> str:
+    """List every workflow (playbook) in the workspace as `<id>\\tname`, drafts included.
+
+    workspace/workflows/index.tsv lists only callable (published, active, on_demand)
+    workflows, so use this to see a draft, a scheduled/event workflow, or to answer
+    "which workflows exist?" without knowing the exact name."""
+    return discovery.list_workflows()
 
 
 @mcp.tool(name="fetch_options")
@@ -86,7 +96,7 @@ def _publish_automation(playbook_id: str, acknowledge_risks: bool = False, allow
 
 @mcp.tool(name="get_tables_schema")
 def _get_tables_schema(output: str = "") -> str:
-    """Write every table in the workspace, with column-level schema, to a YAML file (default: tables/tables-schema.yaml)."""
+    """Write every table in the workspace, with column-level schema, to a YAML file (default: workspace/tables/schema.yaml)."""
     return tables.get_tables_schema(output=output)
 
 
@@ -161,7 +171,7 @@ def _list_agents() -> str:
 
 @mcp.tool(name="fetch_agent")
 def _fetch_agent(ref: str, stdout: bool = False, output: str = "") -> str:
-    """Pull an existing Blink agent (by id or agent-builder URL) into agents/ as YAML."""
+    """Pull an existing Blink agent (by id or agent-builder URL) into workspace/agents/ as YAML."""
     return agents.fetch_agent(ref, stdout=stdout, output=output)
 
 

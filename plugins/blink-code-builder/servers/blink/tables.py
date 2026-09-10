@@ -10,7 +10,7 @@ import yaml
 
 from blink_shared.client import build_client, raise_for_status
 
-DEFAULT_OUTPUT = Path("tables") / "tables-schema.yaml"
+DEFAULT_OUTPUT = Path("workspace/tables") / "schema.yaml"
 
 # Mirrors backend's field attribute names
 _ATTR_REQUIRED = "required"
