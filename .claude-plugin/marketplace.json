@@ -1,0 +1,39 @@
+{
+  "name": "blink-marketplace",
+  "owner": {
+    "name": "BlinkOps Inc."
+  },
+  "metadata": {
+    "description": "Marketplace for BlinkOps plugin releases.",
+    "version": "0.0.1"
+  },
+  "plugins": [
+    {
+      "name": "blink-code-builder",
+      "source": "./plugins/blink-code-builder",
+      "description": "Authors Blink automations as YAML from natural-language prompts, validates them against your workspace's action catalog, and saves them as drafts. Calls the Blink controller HTTP API directly.",
+      "version": "0.1.0",
+      "author": {
+        "name": "BlinkOps Inc."
+      },
+      "homepage": "https://www.blinkops.com/",
+      "repository": "https://github.com/blinkops/blink-code-builder",
+      "license": "Apache-2.0",
+      "category": "automation",
+      "keywords": [
+        "blink",
+		"blinkops",
+        "workflow",
+        "automation",
+        "claude-code",
+        "skill"
+      ],
+      "tags": [
+        "blink",
+		"blinkops",
+        "yaml-workflows",
+        "gitops"
+      ]
+    }
+  ]
+}

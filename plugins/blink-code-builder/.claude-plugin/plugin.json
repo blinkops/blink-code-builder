@@ -1,0 +1,38 @@
+{
+  "name": "blink-code-builder",
+  "version": "0.1.0",
+  "description": "Authors Blink automations as YAML from natural-language prompts, validates them against your workspace's action catalog, and saves them as drafts in your Blink workspace. Calls the Blink controller HTTP API directly.",
+  "author": {
+    "name": "BlinkOps Inc."
+  },
+  "homepage": "https://www.blinkops.com/",
+  "repository": "https://github.com/blinkops/blink-code-builder",
+  "license": "Apache-2.0",
+  "userConfig": {
+    "blink_controller_url": {
+      "type": "string",
+      "title": "Blink URL",
+      "description": "Your Blink domain, e.g. https://blink.app.blinkops.com",
+      "required": true,
+      "default": "https://blink.app.blinkops.com"
+    },
+    "blink_user_api_key": {
+      "type": "string",
+      "title": "Blink user API key",
+      "description": "Your blink user API key (sent as BLINK-API-KEY header)",
+      "required": true,
+      "sensitive": true
+    },
+    "blink_workspace_id": {
+      "type": "string",
+      "title": "Blink workspace ID",
+      "description": "Target blink workspace ID (UUID)",
+      "required": true
+    },
+    "blink_pack_id": {
+      "type": "string",
+      "title": "Blink pack ID (optional)",
+      "description": "Optional: blink pack ID to save automations into. Leave blank to auto-create/look up per run."
+    }
+  }
+}

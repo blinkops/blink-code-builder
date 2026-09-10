@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep * ${CLAUDE_PLUGIN_DATA}/catalog/*)",
+      "Bash(cp /tmp/*.yaml automations/*)",
+      "Bash(cp automations/* /tmp/*.yaml)",
+      "mcp__plugin_blink-code-builder_blink__list_connections",
+      "mcp__plugin_blink-code-builder_blink__fetch_options",
+      "mcp__plugin_blink-code-builder_blink__validate_automation",
+      "mcp__plugin_blink-code-builder_blink__get_run_log",
+      "mcp__plugin_blink-code-builder_blink__save_automation",
+      "mcp__plugin_blink-code-builder_blink__fetch_automation"
+    ],
+    "ask": [
+      "mcp__plugin_blink-code-builder_blink__trigger_test_run"
+    ]
+  }
+}

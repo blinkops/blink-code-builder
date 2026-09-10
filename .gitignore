@@ -1,0 +1,8 @@
+__pycache__/
+*.py[cod]
+
+# macOS
+.DS_Store
+
+# Local automation drafts written by the plugin
+automations/
