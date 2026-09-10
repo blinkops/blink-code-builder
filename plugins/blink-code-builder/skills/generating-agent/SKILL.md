@@ -38,8 +38,8 @@ attach it.
 ```
 Your repo (workspace/)                                    Blink workspace
 ──────────────────────────────────────────────────────    ──────────────────────
-agents/index.tsv          kind=agent   → agents.<id>       sys_agents          (name, title, pack)
-agents/alert-triage.yaml  ◄────────────────────────►       sys_agent_versions  (role, abilities…)
+agents/index.tsv          kind=agent   → agents.<id>       agent record        (name, title, pack)
+agents/alert-triage.yaml  ◄────────────────────────►       agent version       (role, abilities…)
 workflows/index.tsv       kind=subflow → automations.<id>       draft  ← save_agent
 workflows/enrich-observable.yaml ◄─────────────────►             published ← publish_agent
 connections/index.tsv                                      playbooks           (workflows)
