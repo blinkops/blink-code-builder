@@ -29,7 +29,7 @@ DEFAULT_PACK = "blink-code-builder"
 MESSAGE_SEPARATOR = b"%%%%_____________%%%%BLINK_MESSAGE%%%%_____________%%%%"
 END_EXECUTION_COMMAND = "EndExecution"
 MAX_WAIT_SECONDS = 600
-ALLOWLIST_PATH = Path("automations/connections-allowlist.yaml")
+ALLOWLIST_PATH = Path("workflows/connections-allowlist.yaml")
 WORKFLOWS_LIST_PATH = Path("workflows") / "workflows-list.tsv"
 
 AUTOMATION_TYPES = {"on_demand", "scheduled", "event"}
@@ -1308,7 +1308,7 @@ def trigger_test_run(playbook_id, acknowledge_risks=False):
 
     Before opening the run, three gates (a test run is NOT a dry run — it executes real
     actions against real systems, see reference/safety.md):
-      1. Connections allowlist (`automations/connections-allowlist.yaml`, a YAML list of
+      1. Connections allowlist (`workflows/connections-allowlist.yaml`, a YAML list of
          connection names). Any step-level connection not on the list → `[BLOCKED
          CONNECTIONS]` block so the SKILL flow can offer to extend the allowlist.
       2. Human-wait scan. A step that waits for a human (internal.Sleep with

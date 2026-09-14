@@ -38,7 +38,7 @@ shows `automation_type: on_demand`, `active: true`, and state `published` or `mo
 draft alone is never callable. See the `subflows` skill for the full lifecycle.
 
 Each workflow that's been fetched also has its own YAML file, written by `fetch_automation` to
-`automations/<name>.yaml` and saved back with `save_automation`.
+`workflows/<name>.yaml` and saved back with `save_automation`.
 
 ### Agents
 

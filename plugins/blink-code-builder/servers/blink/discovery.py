@@ -19,12 +19,12 @@ MATCH_NONE = "none"
 
 
 def fetch_automation(ref, stdout=False, output=""):
-    """Pull an existing Blink playbook out of the workspace into automations/ as YAML.
+    """Pull an existing Blink playbook out of the workspace into workflows/ as YAML.
 
     This is the entry point for *revising a workflow that lives in Blink* (e.g. one
     authored in the UI). It accepts a playbook id OR a Blink editor URL
     (https://.../workflow/<id>/edit), writes the playbook YAML to
-    automations/<name>.yaml, and records the id in the shared name->id cache so the
+    workflows/<name>.yaml, and records the id in the shared name->id cache so the
     next `save_automation` call updates this same playbook in place instead of
     creating a duplicate.
 
@@ -51,7 +51,7 @@ def fetch_automation(ref, stdout=False, output=""):
     if stdout:
         return yaml_text
 
-    out_path = Path(output) if output else Path("automations") / f"{name}.yaml"
+    out_path = Path(output) if output else Path("workflows") / f"{name}.yaml"
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(yaml_text)
 

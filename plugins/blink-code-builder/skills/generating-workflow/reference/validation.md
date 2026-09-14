@@ -59,12 +59,12 @@ Never leave an unvalidated YAML in the user's repo.
 
 1. Draft to `/tmp/<name>.yaml` (scratch).
 2. Call `validate_automation` against the scratch file.
-3. On `[OK]` → promote the file to `automations/<name>.yaml`, then call `save_automation`.
+3. On `[OK]` → promote the file to `workflows/<name>.yaml`, then call `save_automation`.
 4. On `[ERROR]` → read **all** error lines (they surface together), apply fixes in one pass, re-call. Cap at **3 iterations**.
 5. On `[CATALOG MISSING]` → for a new automation, stop and ask the user to check `userConfig` and `${CLAUDE_PLUGIN_DATA}/refresh.log`; don't try to recover from inside the skill. For a code-only revision, re-call with `allow_missing_catalog: true` and continue.
 6. If iteration 4 would start (genuine YAML errors the validator keeps rejecting), stop. Report the last errors and what you tried. Don't keep guessing.
 
-For revisions on an **existing** automation: draft the edit into `/tmp/`, validate there, and only overwrite `automations/<name>.yaml` once `[OK]`. Don't echo the new YAML in your response — the user reviews via `git diff`.
+For revisions on an **existing** automation: draft the edit into `/tmp/`, validate there, and only overwrite `workflows/<name>.yaml` once `[OK]`. Don't echo the new YAML in your response — the user reviews via `git diff`.
 
 ## Input format
 

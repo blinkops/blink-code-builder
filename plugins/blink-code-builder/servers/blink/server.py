@@ -27,7 +27,7 @@ def _list_connections() -> str:
 
 @mcp.tool(name="fetch_automation")
 def _fetch_automation(ref: str, stdout: bool = False, output: str = "") -> str:
-    """Pull an existing Blink playbook (by id or editor URL) into automations/ as YAML."""
+    """Pull an existing Blink playbook (by id or editor URL) into workflows/ as YAML."""
     return discovery.fetch_automation(ref, stdout=stdout, output=output)
 
 

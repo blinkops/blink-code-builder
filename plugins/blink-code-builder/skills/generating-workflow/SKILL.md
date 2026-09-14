@@ -16,7 +16,7 @@ The single most important rule. If you aren't certain of a choice, **stop and as
 **But spend questions wisely.** Each question is friction — don't bother the user for nothing. Before asking:
 
 1. **Is the answer already in the prompt?** If they wrote "the ai-monitoring channel," that's the channel name. Don't re-pose it as "name vs id?". Don't manufacture an A/B choice when the user already picked A.
-2. **Can you derive it from the repo or catalog?** If another automation in `automations/` uses the same vendor, reuse its connection (see the **Connections** section). If the catalog lists one obvious action for the capability, just pick it.
+2. **Can you derive it from the repo or catalog?** If another automation in `workflows/` uses the same vendor, reuse its connection (see the **Connections** section). If the catalog lists one obvious action for the capability, just pick it.
 3. **Does the question actually block drafting?** Connections don't — see Connections. A missing channel name does. Save unblocked questions for handoff, not the start.
 
 When you do ask, batch related questions in one round and keep each question tight.
@@ -40,13 +40,13 @@ Never leave unvalidated YAML in the user's repo. Draft in scratch, validate, onl
 
    **Batch the lookups, don't chain them.** Independent calls — meaning calls whose inputs don't depend on each other's output — must go in a single tool round-trip. Two concrete batches in this step:
 
-   - **Round 1 (parallel):** all the greps (`actions.tsv`, `triggers.tsv`, `automations/` for existing connections) plus reading any reference docs you'll need (`triggers.md`, `expressions.md`, `looking-up-actions.md`, `yaml-formatting.md`, `safety.md`). None of these depend on each other — issue them as one set of parallel tool calls.
+   - **Round 1 (parallel):** all the greps (`actions.tsv`, `triggers.tsv`, `workflows/` for existing connections) plus reading any reference docs you'll need (`triggers.md`, `expressions.md`, `looking-up-actions.md`, `yaml-formatting.md`, `safety.md`). None of these depend on each other — issue them as one set of parallel tool calls.
    - **Round 2 (single Bash call):** once you know which JSON files to read, fetch them all in one `tail -n +1 file1 file2 file3` call. Do **not** issue separate `cat`/`Read` per file. See [reference/looking-up-actions.md](reference/looking-up-actions.md) step 3.
    - **Round 3 (conditional — autofill resolution):** after reading action JSONs, identify any `field_type: 2` params where the user named a specific value. For each, call the `fetch_options` tool with `fetcher_name`, `search: "<user-term>"`, and optionally `inputs`/`connections` to resolve the human-readable label to the actual `value` the action expects. **Pass `connections` whenever the action has `connection_types`** — fetchers that call vendor APIs (Azure, GitHub, Jira, etc.) return 400 without it. Read the first line of the returned text to decide next action: `# N results` → exact match, use the `value`; `# no exact match … N partial matches` → show the candidates to the user and ask them to confirm; `# 0 matches` → retry with a shorter term, then use WebSearch for public identifiers, or ask the user a targeted question for private/internal ones. See [reference/looking-up-actions.md](reference/looking-up-actions.md) — Autofill section. **Skip this round entirely if no autofill params need resolving.**
 
    > **Always verify user-supplied values for `field_type: 2` params.** Even if the user stated a value explicitly (e.g. `"gemini"`, `"BLK"`), you must still call `fetch_options` with `search: "<value>"` to confirm it resolves before writing it into the YAML. Never write a user-provided autofill value unverified — if it doesn't resolve, you'll publish a broken automation silently.
 
-   "Independent" in this skill means: catalog grepping, reading reference docs, scanning `automations/` for prior connection names, listing existing files. "Dependent" (must be sequential) means: anything that feeds the next call's arguments — e.g. the JSON-file reads depend on the grep results, so they go in a *second* round, but still as one parallel batch within that round.
+   "Independent" in this skill means: catalog grepping, reading reference docs, scanning `workflows/` for prior connection names, listing existing files. "Dependent" (must be sequential) means: anything that feeds the next call's arguments — e.g. the JSON-file reads depend on the grep results, so they go in a *second* round, but still as one parallel batch within that round.
 3. **Compose expressions** correctly — Go-expr, not Jinja. See [reference/expressions.md](reference/expressions.md). **Format the YAML itself correctly** — use literal block scalars (`|`) for multi-line or colon/dash-containing values, quote cron expressions and anything that could collide with YAML's implicit booleans/numbers, never repeat a key in one mapping. See [reference/yaml-formatting.md](reference/yaml-formatting.md) — most test-run failures trace back to one of these, not to the action logic.
 4. **Draft to `/tmp/<name>.yaml`**. Do not write into the user's repo yet. For autofill params, write the full object — both `display_name` (the label) and `value` (the ID) — e.g.:
    ```yaml
@@ -56,15 +56,15 @@ Never leave unvalidated YAML in the user's repo. Draft in scratch, validate, onl
    ```
    If resolution failed because no playbooks exist yet, leave the param empty and call it out in the step 8 handoff note.
 5. **Validate and fix.** Call the `validate_automation` tool with `path: "/tmp/<name>.yaml"`. It reports two layers — structural validity (`[ERROR]` lines, including syntax errors in `core.python`/`core.pythonV2` bodies, and **connection keys that aren't one of the action's `connection_types`** — which catches a wrong/transposed integration slug on a step's `connections:` even when the action `full_name` is correct, with a "Did you mean…?" hint) and **test run readiness** (the same checks the UI uses to enable the Test run button: missing required action inputs, missing required connections, required playbook inputs without defaults). Iterate up to 3 times to clear `[ERROR]`s — never promote (step 6) or save (step 7) YAML that still has `[ERROR]`s. Readiness blockers don't fail validation but you'll handle them in step 8. If the catalog is unavailable, the tool returns `[CATALOG MISSING]` — for **new** automations, stop and route the user through `setup-blink-plugin`; for a **code-only revision** (no new actions), re-call with `allow_missing_catalog: true` to get structural + embedded-Python checks anyway. See [reference/validation.md](reference/validation.md).
-6. **Promote** the validated YAML to the user's `automations/` directory (create if missing). One file per automation.
+6. **Promote** the validated YAML to the user's `workflows/` directory (create if missing). One file per automation.
 7. **Save** as a draft: call the `save_automation` tool with `path: "<automations-path>"`. The tool reads `CLAUDE_PLUGIN_OPTION_BLINK_*` env vars that Claude Code injects into the MCP server from `userConfig`; if the call fails with a missing-config error, **stop and route the user through the `setup-blink-plugin` skill** — don't try to source `.env` files or guess values. The save operation upserts by name **across all packs** (not just the plugin's own pack), so re-running on an edited file updates the same draft instead of creating a duplicate. When you already know the target (e.g. you pulled it with `fetch_automation`, or the user gave an id/URL), pass `playbook_id: "<id|url>"` to update it directly and skip the search. Report the playbook id and the **full editor link** the tool returns (`editor: https://...`) — always give the user the clickable link, never just an id or a path. **Don't echo the YAML body**; the user reviews via `git diff`.
 8. **Run the test, or hand off to the user.** Re-read the readiness section that `validate_automation` returned in step 5 (or re-call it on the promoted file):
    - `READY` — call the `trigger_test_run` tool with `playbook_id`. It opens the controller's streaming endpoint (same path the UI's Test Run uses), blocks until the workflow reaches a terminal state, and returns `state_ui` + `step_results`. Don't ask the user to click Run. If `state_ui=Completed` with no step errors → one-line success note, done. Otherwise → step 9.
 
      **Before the streaming call, the tool runs three gates.** Remember: a test run is **not a dry run** — every step executes for real. See [reference/safety.md](reference/safety.md).
-       - **`[BLOCKED CONNECTIONS]`** — the draft references a connection not in `automations/connections-allowlist.yaml` (a YAML list of connection names approved for this repo), or the file doesn't exist. Handle by:
+       - **`[BLOCKED CONNECTIONS]`** — the draft references a connection not in `workflows/connections-allowlist.yaml` (a YAML list of connection names approved for this repo), or the file doesn't exist. Handle by:
          1. Tell the user which connections are disallowed (and, if helpful, call the `list_connections` tool so they see what's available in the workspace).
-         2. Ask whether to add them to `automations/connections-allowlist.yaml`.
+         2. Ask whether to add them to `workflows/connections-allowlist.yaml`.
          3. If yes, append the names to the file (create it as a YAML list if missing) and re-call `trigger_test_run`. If no, stop — don't run.
        - **`[BLOCKED HUMAN_WAIT]`** — the draft contains steps that wait for a human (`internal.Sleep` with `Mode: Web Form Response`, or `wait_for_response: true`). An automatic test run either parks for hours or silently skips the wait. **Don't offer to change the YAML** — hand off: tell the user why the automatic run is skipped, give them the full editor link the tool returns, and ask them to click Test Run and answer the form themselves. Once they confirm it finished → step 9 (fetch the run log).
        - **`[BLOCKED SAFETY]`** — the draft contains high blast-radius steps (destructive action names, messaging inside an `internal.for` loop, `@here`/`@channel`/`@everyone` mentions). Handle by:
@@ -91,15 +91,15 @@ Never leave unvalidated YAML in the user's repo. Draft in scratch, validate, onl
 
 ### Revising an existing automation
 
-**First, get the YAML into `automations/`.** The automation may already be a local file, or it may live only in Blink (e.g. authored in the UI, or the user handed you an editor URL).
+**First, get the YAML into `workflows/`.** The automation may already be a local file, or it may live only in Blink (e.g. authored in the UI, or the user handed you an editor URL).
 
-- **Already in `automations/`?** Read it.
-- **Lives in Blink (id or editor URL, not in the repo)?** Pull it first: call the `fetch_automation` tool with `ref: "<playbook-id | editor-url>"`. This writes `automations/<name>.yaml` and caches the playbook id so the later save updates that same playbook in place (no duplicate). Pass `stdout: true` if you only want to inspect it without writing a file.
+- **Already in `workflows/`?** Read it.
+- **Lives in Blink (id or editor URL, not in the repo)?** Pull it first: call the `fetch_automation` tool with `ref: "<playbook-id | editor-url>"`. This writes `workflows/<name>.yaml` and caches the playbook id so the later save updates that same playbook in place (no duplicate). Pass `stdout: true` if you only want to inspect it without writing a file.
 
 Then:
 
 1. Draft the edit into `/tmp/<name>.yaml` (scratch). Validate there. If your change only touches code/inputs inside existing steps (no new actions) and the catalog isn't available, call validate with `allow_missing_catalog: true` — it still runs structural + embedded-Python checks.
-2. Overwrite the existing `automations/<name>.yaml` in place — same filename, same `name:`. Do not create `_v2.yaml`.
+2. Overwrite the existing `workflows/<name>.yaml` in place — same filename, same `name:`. Do not create `_v2.yaml`.
 3. Re-run save (step 7 of the Flow). If the playbook was pulled with `fetch_automation` or saved before, the upsert finds it automatically; otherwise pass `playbook_id: "<id|url>"` to target it directly. Report what changed in one or two sentences. Don't echo the new YAML.
 
 ## YAML shape
@@ -135,11 +135,11 @@ Only `workflow` is strictly required; everything else has sensible defaults.
 1. **List the workspace's connections — two sources, pick deliberately.** `connections/connections.tsv` (`<name>\t<type_name>`) is a repo file, refreshed at session start and again after every `publish_automation` call — free to grep, no round-trip. The `list_connections` tool hits the workspace live — always current, but costs a call. Default to the cached file; call `list_connections` instead when you suspect it's stale (the user just mentioned adding a connection this session, or the file is missing/empty) or when the cached file simply isn't there for some reason. Either way, use the result as the candidate set for every step that needs a connection.
 2. **Pick by type.** Filter the list to the connection type the step needs (e.g. `slack` for `slack.send_message`):
    - Exactly one match → use it.
-   - Multiple matches → if one of them already appears in another `automations/*.yaml` (grep `automations/` to check), prefer it and tell the user you reused it and where from. Otherwise ask the user which to bind.
+   - Multiple matches → if one of them already appears in another `workflows/*.yaml` (grep `workflows/` to check), prefer it and tell the user you reused it and where from. Otherwise ask the user which to bind.
    - No match → leave blank and call it out at handoff.
 3. **If the user volunteers a connection** (in the original prompt or in response), use that name verbatim — even if it isn't in the `list_connections` output (the workspace may have been updated since). Put it in the YAML and re-run save (step 7 of the Flow) **before moving forward** to test run. Don't leave the connection name parked in chat.
 
-### Allowlist (`automations/connections-allowlist.yaml`)
+### Allowlist (`workflows/connections-allowlist.yaml`)
 
 The repo carries a per-repo allowlist of connection names that are cleared for test runs. The `trigger_test_run` tool aborts before opening the streaming run if the draft references any connection not on the list. Shape: a flat YAML list at the repo root path above:
 
