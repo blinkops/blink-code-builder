@@ -106,7 +106,7 @@ Each entry:
 | `summarize_output_instructions` | `""` | What the summary should keep. Only meaningful with `summarize_output: true`. |
 
 Get `ability_id` from `workspace/workflows/workflows-list.tsv`: a callable row's (`automation_type=
-on_demand`, `state=published`/`modified`, `active=true`) `action` column is
+on_demand`, `state=published`/`modified`, `active=true`) `id` column is
 `automations.<uuid>` — the `ability_id` is that uuid without the prefix.
 
 An ability can **only** be a workflow. There is no ability type for a vendor action, and no

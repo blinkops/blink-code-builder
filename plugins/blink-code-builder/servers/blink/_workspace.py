@@ -13,8 +13,8 @@ from blink_shared.config import workspace_root
 WORKFLOWS_LIST_PATH = workspace_root() / "workflows" / "workflows-list.tsv"
 AGENTS_LIST_PATH = workspace_root() / "agents" / "agents-list.tsv"
 
-WORKFLOW_ACTION_PREFIX = "automations."
-AGENT_ACTION_PREFIX = "agents."
+WORKFLOW_PREFIX = "automations."
+AGENT_PREFIX = "agents."
 
 # A row in one of these states is live and callable; `draft` never is.
 CALLABLE_STATES = ("published", "modified")
@@ -22,16 +22,16 @@ CALLABLE_STATES = ("published", "modified")
 
 class WorkflowRow(NamedTuple):
     """One line of workflows-list.tsv."""
-    action: str = ""              # "automations.<uuid>" — paste verbatim into a step's `action:`
+    id: str = ""                  # bare UUID
     name: str = ""
     automation_type: str = ""     # on_demand | scheduled | event
     state: str = ""               # draft | published | modified
     active: str = ""              # "true" | "false"
 
     @property
-    def id(self):
-        """The bare UUID, without the `automations.` prefix."""
-        return self.action.removeprefix(WORKFLOW_ACTION_PREFIX)
+    def action(self):
+        """What a step's `action:` field takes: `automations.<id>`."""
+        return WORKFLOW_PREFIX + self.id
 
     @property
     def is_callable(self):
@@ -43,14 +43,14 @@ class WorkflowRow(NamedTuple):
 
 class AgentRow(NamedTuple):
     """One line of agents-list.tsv."""
-    action: str = ""              # "agents.<uuid>" — paste verbatim into a step's `action:`
+    id: str = ""                  # bare UUID
     name: str = ""                # may be "<name> | <title>"
     state: str = ""               # draft | published | modified
 
     @property
-    def id(self):
-        """The bare UUID, without the `agents.` prefix."""
-        return self.action.removeprefix(AGENT_ACTION_PREFIX)
+    def action(self):
+        """What a step's `action:` field takes: `agents.<id>`."""
+        return AGENT_PREFIX + self.id
 
     @property
     def is_callable(self):

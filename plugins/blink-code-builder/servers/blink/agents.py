@@ -28,8 +28,7 @@ from typing import NamedTuple
 import yaml
 from blink_shared.client import build_client, raise_for_status
 from blink_shared.config import agent_editor_url, workspace_base_url, workspace_root
-from ._workspace import (AGENTS_LIST_PATH, AGENT_ACTION_PREFIX, callable_workflow_ids,
-                         agent_id_by_name)
+from ._workspace import AGENTS_LIST_PATH, callable_workflow_ids, agent_id_by_name
 
 
 DEFAULT_AGENT_PACK = "Home"
@@ -286,7 +285,7 @@ def list_agents(output=""):
     lines = [
         "# state: draft = never published | published = live, draft matches it | "
         "modified = live, but the draft has newer edits that are not published yet",
-        "# action\tname\tstate",
+        "# id\tname\tstate",
     ]
     total = 0
     for row in rows or []:
@@ -295,7 +294,7 @@ def list_agents(output=""):
         name = row.get("name") or ""
         if row.get("title"):
             name += f" | {row['title']}"
-        lines.append(f"{AGENT_ACTION_PREFIX}{row.get('id')}\t{name}\t{state}")
+        lines.append(f"{row.get('id')}\t{name}\t{state}")
 
     out_path = Path(output) if output else AGENTS_LIST_PATH
     out_path.parent.mkdir(parents=True, exist_ok=True)

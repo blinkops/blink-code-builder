@@ -16,7 +16,7 @@ from ._blink import resolve_playbook_ref, update_draft, update_id_cache, cached_
     list_packs, find_playbook_across_packs, record_test_evidence, load_test_evidence, \
     yaml_digest, iter_steps, flatten_steps
 from ._workspace import (workspace_action_names, WORKFLOWS_LIST_PATH,
-                         WORKFLOW_ACTION_PREFIX, AGENT_ACTION_PREFIX)
+                         WORKFLOW_PREFIX, AGENT_PREFIX)
 from ._safety import scan_blast_radius
 from blink_shared.client import build_client, raise_for_status
 from blink_shared.config import catalog_root, editor_url, workspace_base_url, workspace_root
@@ -585,19 +585,20 @@ def _validate_workspace_action_call(step, action_name, workspace_actions):
         return []  # workspace snapshot unavailable: can't verify, don't false-flag
     if action_name in workspace_actions:
         return []
-    if action_name.startswith(AGENT_ACTION_PREFIX):
+    if action_name.startswith(AGENT_PREFIX):
         return [
             f"[ERROR] step {step.get('id')}: agent {action_name!r} is not callable in this "
             "workspace. Either the id is wrong, or the agent has never been published — an "
-            "agent becomes callable only when published. Copy the `action` column of a "
-            "published/modified row in agents-list.tsv, or publish the agent first "
-            "(see the generating-agent skill)."
+            "agent becomes callable only when published. Take the `id` column of a "
+            "published/modified row in agents-list.tsv and write `agents.<id>`, or publish "
+            "the agent first (see the generating-agent skill)."
         ]
     return [
         f"[ERROR] step {step.get('id')}: action {action_name!r} is not callable in this workspace. "
         "Either the id is wrong, or the target workflow isn't published and active — only a "
-        "published, active on_demand workflow is callable as a subflow. Copy the `action` column "
-        "of a callable row in workflows-list.tsv, or publish the target workflow first."
+        "published, active on_demand workflow is callable as a subflow. Take the `id` column "
+        "of a callable row in workflows-list.tsv and write `automations.<id>`, or publish the "
+        "target workflow first."
     ]
 
 
@@ -672,9 +673,9 @@ def _validate(automation, actions_catalog, triggers_catalog, workspace_actions, 
         # Action exists + required parameters + enum options.
         if action_name in BRANCH_ACTIONS:
             continue  # engine-handled, structurally validated above
-        if action_name.startswith((WORKFLOW_ACTION_PREFIX, AGENT_ACTION_PREFIX)):
+        if action_name.startswith((WORKFLOW_PREFIX, AGENT_PREFIX)):
             errors.extend(_validate_workspace_action_call(step, action_name, workspace_actions))
-            if action_name.startswith(AGENT_ACTION_PREFIX):
+            if action_name.startswith(AGENT_PREFIX):
                 agent_errors, agent_warnings = _validate_agent_step_inputs(step)
                 errors.extend(agent_errors)
                 warnings.extend(agent_warnings)
@@ -937,7 +938,7 @@ def validate_automation(path, allow_missing_catalog=False):
     # A subflow must never call itself directly. We only know this automation's own id if a
     # previous save cached it — indirect (multi-hop) cycles are the engine's job to catch.
     own_playbook_id = cached_playbook_id(automation.get("name") or "")
-    if own_playbook_id and f"{WORKFLOW_ACTION_PREFIX}{own_playbook_id}" in automation_actions_names:
+    if own_playbook_id and f"{WORKFLOW_PREFIX}{own_playbook_id}" in automation_actions_names:
         errors.append(
             f"[ERROR] a step calls this automation's own playbook id ({own_playbook_id}) — "
             "a subflow must never call itself."
@@ -1002,14 +1003,14 @@ def list_workflows(output=""):
     lines = [
         "# state: draft = never published | published = live, draft matches it | "
         "modified = live, but the draft has newer edits that are not published yet",
-        "# action\tname\tautomation_type\tstate\tactive",
+        "# id\tname\tautomation_type\tstate\tactive",
     ]
     total = 0
     for pack in packs:
         for automation in pack.get("automations") or []:
             total += 1
             lines.append(
-                f"{WORKFLOW_ACTION_PREFIX}{automation.get('id')}\t{automation.get('name') or ''}\t"
+                f"{automation.get('id')}\t{automation.get('name') or ''}\t"
                 f"{automation.get('automation_type') or 'on_demand'}\t{_workflow_state(automation)}\t"
                 f"{'true' if automation.get('active') else 'false'}"
             )

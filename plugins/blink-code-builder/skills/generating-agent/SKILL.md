@@ -40,10 +40,10 @@ Your repo                                            Blink workspace
 ─────────────────────────                            ──────────────────────
 workspace/agents/                                     name, title, pack
   alert-triage.yaml    ◄──────────────────────────►   role, abilities…
-  agents-list.tsv          action, name, state             draft  ← save_agent
+  agents-list.tsv          id, name, state             draft  ← save_agent
                             (list_agents; drafts included)  published ← publish_agent
 workspace/workflows/
-  workflows-list.tsv       action, name, automation_type,
+  workflows-list.tsv       id, name, automation_type,
                             state, active (list_workflows)
                                                        agents.<id> row created on publish
 workspace/connections/
@@ -105,8 +105,8 @@ saved/published elsewhere), re-run `list_agents` before telling the user an agen
 
 1. **Decide the abilities first.** Grep `workspace/workflows/workflows-list.tsv` for rows with
    `automation_type=on_demand`, `state=published`/`modified`, and `active=true` — those are
-   the workspace's callable workflows and the only eligible abilities. The `action` column is
-   `automations.<uuid>`; the `ability_id` is that uuid **without** the prefix.
+   the workspace's callable workflows and the only eligible abilities. The `id` column is
+   the bare uuid, which is exactly what `ability_id` takes.
 2. **Any ability that doesn't exist yet?** Author and publish that workflow first with the
    `generating-workflow` skill — full loop, including its own test run. It is not attachable
    until it is published.
@@ -144,7 +144,7 @@ then the agent, then the calling workflow. Say which order you're taking and why
 
 ```yaml
 - id: S3
-  action: agents.<agent-uuid>        # copy the `action` column of a published/modified row in agents-list.tsv, verbatim
+  action: agents.<agent-uuid>        # agents.<id>, from the `id` column of a published/modified row in agents-list.tsv
   name: Triage the alert
   inputs:
     task: "Triage this alert and return a verdict"

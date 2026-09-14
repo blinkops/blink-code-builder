@@ -50,7 +50,7 @@ Keep the id from the save/publish response — that's what the parent references
     <input_name>: <value>
 ```
 
-- Always reference by **uuid**, never by name. The `action` column of a row in `workspace/workflows/workflows-list.tsv` is that exact string — copy it, don't assemble it by hand.
+- Always reference by **uuid**, never by name. Take the uuid from the `id` column of `workspace/workflows/workflows-list.tsv` and write it as `automations.<id>`.
 - `inputs:` come from the subflow's own declared top-level `inputs:` — check `fetch_automation` or the catalog if unsure.
 - The calling step normally needs **no `connections:` block** — the subflow's internal steps carry their own connections. If the subflow declares an input of `type: connections`, pass the connection's **name** as a regular input value.
 - The subflow's output is available at `{{ steps.<id>.output }}` — sync calls only.
@@ -100,7 +100,7 @@ If the request doesn't make the choice obvious, ask the user.
 
 ### Where to look
 
-- `workspace/workflows/workflows-list.tsv` — every workflow in the workspace, drafts included (`action`, `name`, `automation_type`, `state`, `active`). Callable right now only when `automation_type=on_demand`, `state=published`/`modified`, and `active=true` — its `action` column is the exact `automations.<uuid>` string to put in the step. Written by `list_workflows`; re-run it if the file looks stale. `workspace/agents/agents-list.tsv` is the equivalent for agents (`published`/`modified` rows are callable), written by `list_agents`.
+- `workspace/workflows/workflows-list.tsv` — every workflow in the workspace, drafts included (`id`, `name`, `automation_type`, `state`, `active`). Callable right now only when `automation_type=on_demand`, `state=published`/`modified`, and `active=true` — the step's action is `automations.<id>`, built from its `id` column. Written by `list_workflows`; re-run it if the file looks stale. `workspace/agents/agents-list.tsv` is the equivalent for agents (`published`/`modified` rows are callable), written by `list_agents`.
 - `workspace/connections/connections.tsv` (repo file) — every connection (`name`, `type_name`).
 
 Grep these first; only call `fetch_automation` / `list_connections` live when you need more detail. Drafts are listed too — see the last rule of the draft-vs-published section. You don't need one to avoid duplicates: `save_automation` matches the name live across all packs and updates that workflow in place.

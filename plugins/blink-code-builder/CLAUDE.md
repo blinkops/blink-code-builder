@@ -42,8 +42,9 @@ Each workflow that's been fetched also has its own YAML file, written by `fetch_
 
 ### Agents
 
-`workspace/agents/agents-list.tsv` lists every agent in the workspace, drafts included — `action`
-(`agents.<id>`), name, and state (`draft`/`published`/`modified`). It's a repo file, written
+`workspace/agents/agents-list.tsv` lists every agent in the workspace, drafts included — id,
+name, and state (`draft`/`published`/`modified`). A step calls an agent as `agents.<id>`.
+It's a repo file, written
 by `list_agents` and kept in sync automatically after `save_agent` and `publish_agent`. Grep
 it first; re-run `list_agents` if it looks stale. An agent is callable as a workflow step only
 once its row is `published` or `modified` — a draft is never callable. See the

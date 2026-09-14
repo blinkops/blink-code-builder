@@ -19,10 +19,10 @@ catalog/
 
 workspace/                             # this workspace's own content — repo files, not the catalog cache
 ├── workflows/
-│   ├── workflows-list.tsv             # greppable: action <TAB> name <TAB> automation_type <TAB> state <TAB> active
+│   ├── workflows-list.tsv             # greppable: id <TAB> name <TAB> automation_type <TAB> state <TAB> active
 │   └── <name>.yaml                    # one fetched workflow
 ├── agents/
-│   ├── agents-list.tsv                # greppable: action <TAB> name <TAB> state
+│   ├── agents-list.tsv                # greppable: id <TAB> name <TAB> state
 │   └── <name>.yaml                    # one fetched agent
 ├── connections/
 │   └── connections.tsv                # greppable: name <TAB> type_name — the workspace's bound connections
@@ -147,7 +147,7 @@ Flow-control and built-ins live under the `internal` and `core` services: `core.
 
 ## Calling another workflow
 
-To call another workflow as a step, don't look it up here — there's no `playbooks.<name>` action. Grep **`workspace/workflows/workflows-list.tsv`** (in the repo, not the catalog; regenerate with `list_workflows` if it looks stale) and copy the `action` column (`automations.<uuid>`) straight into the step. It's callable only when the row shows `automation_type: on_demand`, `active: true`, and state `published` or `modified` — otherwise (draft, deactivated, or not on-demand) see the `subflows` skill: publish it first, and never call it by name.
+To call another workflow as a step, don't look it up here — there's no `playbooks.<name>` action. Grep **`workspace/workflows/workflows-list.tsv`** (in the repo, not the catalog; regenerate with `list_workflows` if it looks stale) and take its `id` column and write `automations.<id>` in the step. It's callable only when the row shows `automation_type: on_demand`, `active: true`, and state `published` or `modified` — otherwise (draft, deactivated, or not on-demand) see the `subflows` skill: publish it first, and never call it by name.
 
 ## When lookup fails
 
