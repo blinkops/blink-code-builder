@@ -26,12 +26,10 @@ class WorkflowRow(NamedTuple):
     state: str = ""               # draft | published | modified
     active: str = ""              # "true" | "false"
 
-    @property
     def action(self):
         """What a step's `action:` field takes: `automations.<id>`."""
         return WORKFLOW_PREFIX + self.id
 
-    @property
     def is_callable(self):
         """Whether a workflow step or an agent ability can call this row right now."""
         return (self.automation_type == "on_demand"
@@ -45,17 +43,14 @@ class AgentRow(NamedTuple):
     name: str = ""                # may be "<name> | <title>"
     state: str = ""               # draft | published | modified
 
-    @property
     def action(self):
         """What a step's `action:` field takes: `agents.<id>`."""
         return AGENT_PREFIX + self.id
 
-    @property
     def is_callable(self):
         """Whether a workflow step can call this agent right now."""
         return self.state in CALLABLE_STATES
 
-    @property
     def plain_name(self):
         """The name alone, dropping the ` | <title>` suffix the file may carry."""
         return self.name.split(" | ", 1)[0].strip()
@@ -100,7 +95,7 @@ def callable_workflow_ids(path=WORKFLOWS_LIST_PATH):
     rows = read_workflows(path)
     if rows is None:
         return None
-    return {row.id for row in rows if row.is_callable}
+    return {row.id for row in rows if row.is_callable()}
 
 
 def agent_id_by_name(name, path=AGENTS_LIST_PATH):
@@ -113,7 +108,7 @@ def agent_id_by_name(name, path=AGENTS_LIST_PATH):
         return None
     wanted = (name or "").strip().lower()
     for row in rows:
-        if row.plain_name.lower() == wanted:
+        if row.plain_name().lower() == wanted:
             return row.id, row.state
     return None
 
@@ -128,6 +123,6 @@ def workspace_action_names(workflows_path=WORKFLOWS_LIST_PATH, agents_path=AGENT
     agent_rows = read_agents(agents_path)
     if workflow_rows is None and agent_rows is None:
         return None
-    names = {row.action for row in workflow_rows or () if row.is_callable}
-    names |= {row.action for row in agent_rows or () if row.is_callable}
+    names = {row.action() for row in workflow_rows or () if row.is_callable()}
+    names |= {row.action() for row in agent_rows or () if row.is_callable()}
     return names
