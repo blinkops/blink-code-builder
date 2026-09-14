@@ -101,7 +101,7 @@ If the request doesn't make the choice obvious, ask the user.
 ### Where to look
 
 - `${CLAUDE_PLUGIN_DATA}/catalog/workspace_actions.tsv` — the workspace's callable actions (`action`, `name`, `kind`, `category`, `description`). A `kind=subflow` row is callable right now, and its `action` column is the exact `automations.<uuid>` string to put in the step. `kind=agent` / `kind=template` rows are the workspace's other own actions — same thing, callable as a step.
-- `${CLAUDE_PLUGIN_DATA}/catalog/connections.tsv` — every connection (`name`, `type_name`).
+- `connections/connections.tsv` (repo file) — every connection (`name`, `type_name`).
 
 Grep these first; only call `fetch_automation` / `list_connections` live when you need more detail. Drafts have no local listing — see the last rule of the draft-vs-published section. You don't need one to avoid duplicates: `save_automation` matches the name live across all packs and updates that workflow in place.
 

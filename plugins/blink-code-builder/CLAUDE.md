@@ -14,6 +14,13 @@ Layout (see [skills/generating-workflow/reference/looking-up-actions.md](skills/
 
 If the catalog is missing when you need it, **stop and route the user through the `setup-blink-plugin` skill** — the hook couldn't populate it (usually means `userConfig` isn't set). Don't try to recover from inside another skill.
 
+## Connections live in this repo, not the catalog
+
+`connections/connections.tsv` lists every connection bound in the workspace (name, type) — a
+repo file, not part of the catalog cache above. It's kept fresh automatically by the same
+`SessionStart` hook that populates the catalog (`hooks/refresh_workspace.py`), and refreshed
+again after every `publish_automation` call.
+
 ## Search scope
 
 Read and grep only inside:

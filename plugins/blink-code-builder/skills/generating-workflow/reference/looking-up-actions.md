@@ -14,15 +14,17 @@ If the catalog is missing or empty when you go to look something up, stop and te
 catalog/
 ├── actions.tsv                        # greppable: full_name <TAB> service <TAB> description <TAB> connection_types
 ├── triggers.tsv                       # greppable: full_name <TAB> service <TAB> description
-├── connections.tsv                    # greppable: name <TAB> type_name — the workspace's bound connections
 ├── workspace_actions.tsv              # greppable: action <TAB> name <TAB> kind <TAB> category <TAB> description — the workspace's own callable actions (subflows, agents, templates)
 ├── actions/<service>/<name>.json      # one action's full detail
 └── triggers/<service>/<name>.json     # one trigger's full detail
+
+connections/
+└── connections.tsv                    # greppable: name <TAB> type_name — the workspace's bound connections (repo file, not the catalog cache)
 ```
 
 `connection_types` in `actions.tsv` is a comma-separated list of the connection types the action requires (empty string if none). Use it to pre-filter candidates at grep-time — **no need to read the action's JSON solely to discover its connection type**.
 
-`connections.tsv` and `workspace_actions.tsv` are workspace snapshots, not vendor catalog data — refreshed every session (no staleness gate), unlike `actions.tsv`/`triggers.tsv` which can lag up to 7 days. Use `connections.tsv` to pick a connection name for a step (see [../SKILL.md](../SKILL.md) — Connections). Use `workspace_actions.tsv` for what a step can call **right now** — every row in it is active and callable, and the `action` column is the exact string to put in a step's `action:`.
+`connections.tsv` and `workspace_actions.tsv` are workspace snapshots, not vendor catalog data — refreshed every session (no staleness gate), unlike `actions.tsv`/`triggers.tsv` which can lag up to 7 days. `connections.tsv` lives in the repo rather than the catalog cache, so it also survives a catalog refresh. Use `connections.tsv` to pick a connection name for a step (see [../SKILL.md](../SKILL.md) — Connections). Use `workspace_actions.tsv` for what a step can call **right now** — every row in it is active and callable, and the `action` column is the exact string to put in a step's `action:`.
 
 `workspace_actions.tsv` lists only what is **callable**, so an unpublished draft is not in it — and there is no local list of drafts. If the user points at a workflow that isn't there, get it with `fetch_automation` (id or editor URL) instead of guessing. You never need a draft list to avoid duplicates: `save_automation` looks the name up live across all packs and updates that workflow in place.
 

@@ -42,10 +42,11 @@ agents/                        workspace_actions.tsv               name, title, 
   alert-triage.yaml    ◄──────►   kind=agent   → agents.<id>       role, abilities…
                                   kind=subflow → automations.<id>       draft  ← save_agent
 automations/                                                            published ← publish_agent
-  enrich-observable.yaml ◄────► connections.tsv                    playbooks           (workflows)
-                                                                   actions             (agents.<id> row,
-                                 refreshed: session start,                              created on publish)
-                                 after every publish
+  enrich-observable.yaml                                          playbooks           (workflows)
+connections/                                                     actions             (agents.<id> row,
+  connections.tsv                                                                      created on publish)
+    refreshed: session start,
+    after every publish
 
   you edit ──► validate_agent ──► save_agent ──► publish_agent ──► callable from a workflow
                   (local)          (draft)        (live)
