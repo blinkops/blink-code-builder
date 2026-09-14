@@ -2,7 +2,7 @@
 
 The `list_connections` MCP tool and the SessionStart snapshot must describe the same
 workspace the same way; if this query ever gains paging or a filter, both follow it.
-Each caller formats the rows for its own output — this returns data, not text.
+Each caller formats the returned rows for its own output.
 """
 
 from .client import raise_for_status

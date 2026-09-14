@@ -544,12 +544,11 @@ def _validate_triggers(automation, triggers_catalog):
 
 
 def _validate_agent_step_inputs(step):
-    """Check an `agents.<uuid>` step's inputs against the RunAgent contract.
+    """Check the inputs of a step that calls an agent, during `validate_automation`.
 
-    Needed because agents-list.tsv has no parameter list, so `_check_step_readiness`
-    can't see that `task` is required — a step missing it would otherwise be reported READY
-    and then fail at run time. Unknown names are only a warning: if the action ever gains a
-    parameter, a stale list here must not block a valid workflow.
+    An agent step's parameters aren't described anywhere the validator can read, so this
+    hardcodes them: a missing `task` is an error (the run would fail), anything unknown is
+    only a warning (the agent action may have gained a parameter this list doesn't know).
     """
     errors, warnings = [], []
     step_inputs = step.get("inputs") or {}
@@ -992,10 +991,13 @@ def _workflow_state(automation):
 
 def list_workflows(output=""):
     """List every workflow in the workspace, drafts included, and write it to a TSV file in
-    the repo (default: workspace/workflows/workflows-list.tsv) — mirrors get_tables_schema for tables.
+    the repo (default: workspace/workflows/workflows-list.tsv).
 
     This is the only local way to see a draft or inactive workflow — a row that isn't
     `on_demand`/`active`/`published`-or-`modified` isn't callable as a subflow yet.
+
+    Called by Claude through the `list_workflows` tool, and automatically after every
+    `save_automation` and `publish_automation` so the file keeps up with the workspace.
     """
     with build_client() as api:
         packs = list_packs(api)

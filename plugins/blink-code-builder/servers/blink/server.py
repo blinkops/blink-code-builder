@@ -87,7 +87,7 @@ def _publish_automation(playbook_id: str, acknowledge_risks: bool = False, allow
 @mcp.tool(name="list_workflows")
 def _list_workflows(output: str = "") -> str:
     """Write every workflow in the workspace, drafts included, to a TSV file (default:
-    workspace/workflows/workflows-list.tsv) — mirrors get_tables_schema for tables.
+    workspace/workflows/workflows-list.tsv).
 
     Use this to find a draft/inactive workflow (a row not on_demand/active/published-or-
     modified isn't callable as a subflow yet) or to answer "which workflows exist?" when you
@@ -164,7 +164,7 @@ def _delete_table(table: str, acknowledge_risks: bool = False) -> str:
 @mcp.tool(name="list_agents")
 def _list_agents(output: str = "") -> str:
     """Write every agent in the workspace, drafts included, to a TSV file (default:
-    workspace/agents/agents-list.tsv) — mirrors list_workflows for workflows.
+    workspace/agents/agents-list.tsv).
 
     Use this to find a draft agent (only published/modified is callable as `agents.<id>`) or
     to answer "which agents exist?" when you don't know the exact name. Also auto-synced after
