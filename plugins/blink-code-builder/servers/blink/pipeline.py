@@ -15,7 +15,8 @@ import yaml
 from ._blink import resolve_playbook_ref, update_draft, update_id_cache, cached_playbook_id, \
     list_packs, find_playbook_across_packs, record_test_evidence, load_test_evidence, \
     yaml_digest, iter_steps, flatten_steps
-from ._catalog import workspace_action_names, WORKFLOWS_LIST_PATH
+from ._workspace import (workspace_action_names, WORKFLOWS_LIST_PATH,
+                         WORKFLOW_ACTION_PREFIX, AGENT_ACTION_PREFIX)
 from ._safety import scan_blast_radius
 from blink_shared.client import build_client, raise_for_status
 from blink_shared.config import catalog_root, editor_url, workspace_base_url, workspace_root
@@ -30,11 +31,8 @@ MESSAGE_SEPARATOR = b"%%%%_____________%%%%BLINK_MESSAGE%%%%_____________%%%%"
 END_EXECUTION_COMMAND = "EndExecution"
 MAX_WAIT_SECONDS = 600
 ALLOWLIST_PATH = workspace_root() / "workflows" / "connections-allowlist.yaml"
-# WORKFLOWS_LIST_PATH is imported from ._catalog — one definition, shared with agents.py.
 
 AUTOMATION_TYPES = {"on_demand", "scheduled", "event"}
-WORKFLOW_ACTION_PREFIX = "automations."
-AGENT_ACTION_PREFIX = "agents."
 AGENT_STEP_REQUIRED_INPUTS = ("task",)
 AGENT_STEP_KNOWN_INPUTS = (
     "task", "output_schema", "roles_and_constraints", "timeout",

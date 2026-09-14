@@ -28,11 +28,11 @@ from typing import NamedTuple
 import yaml
 from blink_shared.client import build_client, raise_for_status
 from blink_shared.config import agent_editor_url, workspace_base_url, workspace_root
-from ._catalog import AGENTS_LIST_PATH, callable_workflow_ids, agent_id_by_name
+from ._workspace import (AGENTS_LIST_PATH, AGENT_ACTION_PREFIX, callable_workflow_ids,
+                         agent_id_by_name)
 
 
 DEFAULT_AGENT_PACK = "Home"
-AGENT_ACTION_PREFIX = "agents."
 ABILITY_TYPE_WORKFLOW = "workflow"
 _PRESERVED_KEYS = ("knowledge", "avatar_logo", "avatar_style", "avatar_color")
 _AGENT_MODE_FIELDS = ("chat_enabled", "code_execution_enabled")
@@ -274,7 +274,7 @@ def _agent_state(row):
 
 def list_agents(output=""):
     """List every agent in the workspace, drafts included, and write it to a TSV file in the
-    repo (default: workspace/agents/agents-list.tsv) — mirrors list_workflows for workflows.
+    repo (default: workspace/agents/agents-list.tsv).
 
     This is the only local way to see a draft agent — an agent becomes callable as
     `agents.<id>` only once published.
@@ -315,8 +315,10 @@ def fetch_agent(ref, stdout=False, output=""):
     """Download an agent from the workspace and write it as local YAML.
 
     Gets an agent id or an agent-builder URL. Returns the YAML text if `stdout`, else a
-    summary of the file it wrote (`output`, or workspace/agents/<name>.yaml). Fetches the draft
-    version, since that is what save_agent writes back.
+    summary of the file it wrote (`output`, or workspace/agents/<name>.yaml).
+
+    An agent has two versions server-side, draft and published. This writes the draft,
+    so that editing the file and calling save_agent updates the same version you pulled.
     """
     api = build_client()
     agent_id = _resolve_agent_ref(ref)
@@ -397,16 +399,11 @@ def _validate_config(config):
                             "with NO human approval, in every future session. Publish will block "
                             "on this until the user explicitly approves.")
 
-    # Check every ability is a callable workflow:
-    #   1. dedupe the ability ids
-    #   2. look them up in workflows-list.tsv, which lists callable workflows only
-    #   3. on a miss, one live call says whether the workflow exists but is not callable, or
-    #      does not exist here at all — the two need different fixes
-    # Always warnings, never errors: the local file can be stale, so a workflow published in
-    # the UI a minute ago is missing from it but perfectly fine.
+    # Check every ability is a callable workflow, locally first, then live for the misses.
+    # Warnings only, never errors: the local file can be stale.
     unique_ids = list(dict.fromkeys(ability_ids))
-    subflow_ids = callable_workflow_ids() or set()
-    unresolved = [aid for aid in unique_ids if aid not in subflow_ids]
+    callable_ids = callable_workflow_ids() or set()
+    unresolved = [aid for aid in unique_ids if aid not in callable_ids]
 
     if unresolved:
         try:

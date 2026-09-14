@@ -17,6 +17,5 @@ def fetch_connections(client):
     results = raise_for_status(client.get("/connections")).json().get("results") or []
     rows = ((connection.get("name") or "", connection.get("type_name") or "")
             for connection in results)
-    # Sort by type first, then by name inside each type, so all the slack
-    # connections sit together, then all the aws ones, each group A-Z.
+    # Sort by type first, then by name inside each type.
     return sorted(rows, key=lambda name_and_type: (name_and_type[1], name_and_type[0]))
