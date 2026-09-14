@@ -1,10 +1,5 @@
 #!/usr/bin/env python3
-"""Snapshot the workspace's connections.
-
-SessionStart hook. Writes workspace/connections/connections.tsv (a repo file, alongside
-workspace/agents/ and workspace/tables/) on every session — workspace data changes often,
-so there's no staleness gate here (refresh_catalog.py, the vendor catalog, caches for up
-to 7 days).
+"""SessionStart hook. Writes workspace/connections/connections.tsv on every session.
 
 Config: CLAUDE_PLUGIN_OPTION_BLINK_{CONTROLLER_URL,USER_API_KEY,WORKSPACE_ID}.
 """
@@ -30,7 +25,7 @@ def refresh():
     # Imported here, not at the top: httpx exists only once main() has installed it, and
     # an unconfigured session returns before that happens.
     from blink_shared.client import build_client
-    from blink_shared.connections import DEFAULT_PATH as CONNECTIONS_PATH, fetch_connections
+    from blink_shared.connections import CONNECTIONS_PATH, fetch_connections
 
     CONNECTIONS_PATH.parent.mkdir(parents=True, exist_ok=True)
 
