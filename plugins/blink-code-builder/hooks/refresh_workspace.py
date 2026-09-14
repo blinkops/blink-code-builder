@@ -1,18 +1,17 @@
 #!/usr/bin/env python3
 """Snapshot the workspace's connections.
 
-SessionStart hook. Writes <root>/connections.tsv on every session — workspace data changes
-often, so there's no staleness gate here (refresh_catalog.py, the vendor catalog, caches for
-up to 7 days).
+SessionStart hook. Writes connections/connections.tsv (a repo file, alongside
+agents/ and tables/) on every session — workspace data changes often, so there's no
+staleness gate here (refresh_catalog.py, the vendor catalog, caches for up to 7 days).
 
 Config: CLAUDE_PLUGIN_OPTION_BLINK_{CONTROLLER_URL,USER_API_KEY,WORKSPACE_ID}.
-Root: ${CLAUDE_PLUGIN_DATA}/catalog/ — must be set (Claude Code injects it).
 """
 
 import sys
 
 from _common import clean_for_tsv
-from blink_shared.config import catalog_root, has_config
+from blink_shared.config import has_config
 from blink_shared.deps import ensure_installed
 
 
@@ -30,17 +29,16 @@ def refresh():
     # Imported here, not at the top: httpx exists only once main() has installed it, and
     # an unconfigured session returns before that happens.
     from blink_shared.client import build_client
-    from blink_shared.connections import fetch_connections
+    from blink_shared.connections import DEFAULT_PATH as CONNECTIONS_PATH, fetch_connections
 
-    catalog_dir = catalog_root()
-    catalog_dir.mkdir(parents=True, exist_ok=True)
+    CONNECTIONS_PATH.parent.mkdir(parents=True, exist_ok=True)
 
     with build_client(timeout=30) as client:
         connections = fetch_connections(client)
 
-    write_tsv(catalog_dir / "connections.tsv", "# name\ttype_name", connections)
+    write_tsv(CONNECTIONS_PATH, "# name\ttype_name", connections)
 
-    print(f"ok: {len(connections)} connections -> {catalog_dir}", file=sys.stderr)
+    print(f"ok: {len(connections)} connections -> {CONNECTIONS_PATH}", file=sys.stderr)
 
 
 def main():

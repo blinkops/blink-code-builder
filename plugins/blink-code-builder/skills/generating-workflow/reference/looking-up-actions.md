@@ -14,16 +14,18 @@ If the catalog is missing or empty when you go to look something up, stop and te
 catalog/
 ├── actions.tsv                        # greppable: full_name <TAB> service <TAB> description <TAB> connection_types
 ├── triggers.tsv                       # greppable: full_name <TAB> service <TAB> description
-├── connections.tsv                    # greppable: name <TAB> type_name — the workspace's bound connections
 ├── actions/<service>/<name>.json      # one action's full detail
 └── triggers/<service>/<name>.json     # one trigger's full detail
+
+connections/
+└── connections.tsv                    # greppable: name <TAB> type_name — the workspace's bound connections (repo file, not the catalog cache)
 ```
 
 Workflows and agents — the workspace's own callable actions — are not in the catalog at all; they live in the repo instead, as `workflows/workflows-list.tsv` and `agents/agents-list.tsv` (see below).
 
 `connection_types` in `actions.tsv` is a comma-separated list of the connection types the action requires (empty string if none). Use it to pre-filter candidates at grep-time — **no need to read the action's JSON solely to discover its connection type**.
 
-`connections.tsv` is a workspace snapshot, not vendor catalog data — refreshed every session (no staleness gate), unlike `actions.tsv`/`triggers.tsv` which can lag up to 7 days. Use it to pick a connection name for a step (see [../SKILL.md](../SKILL.md) — Connections).
+`connections/connections.tsv` is a workspace snapshot, not vendor catalog data — refreshed every session (no staleness gate), unlike `actions.tsv`/`triggers.tsv` which can lag up to 7 days. It lives in the repo rather than the catalog cache, so it also survives a catalog refresh. Use it to pick a connection name for a step (see [../SKILL.md](../SKILL.md) — Connections).
 
 `workflows/workflows-list.tsv` and `agents/agents-list.tsv` list every workflow/agent, drafts included — a row is callable right now only once it's published (workflows also need `automation_type=on_demand` and `active=true`). Written by `list_workflows`/`list_agents`; re-run if a file looks stale. You never need these to avoid duplicates when saving: `save_automation`/`save_agent` look the name up live and update that workflow/agent in place.
 

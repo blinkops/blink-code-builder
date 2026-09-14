@@ -35,6 +35,13 @@ it first; re-run `list_agents` if it looks stale. An agent is callable as a work
 once its row is `published` or `modified` — a draft is never callable. See the
 `generating-agent` skill.
 
+## Connections live in this repo too
+
+`connections/connections.tsv` lists every connection bound in the workspace (name, type) — a
+repo file, not part of the catalog cache above. It's kept fresh automatically by the same
+`SessionStart` hook that populates the catalog (`hooks/refresh_workspace.py`), and refreshed
+again after every `publish_automation` call.
+
 ## Search scope
 
 Read and grep only inside:

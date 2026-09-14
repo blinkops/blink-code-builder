@@ -46,6 +46,10 @@ workflows/
   workflows-list.tsv       action, name, automation_type,
                             state, active (list_workflows)
                                                        agents.<id> row created on publish
+connections/
+  connections.tsv          name, type_name
+                            (refreshed: session start, after every publish)
+
   you edit ──► validate_agent ──► save_agent ──► publish_agent ──► callable from a workflow
                   (local)          (draft)        (live, auto-syncs agents-list.tsv)
 ```

@@ -101,7 +101,7 @@ If the request doesn't make the choice obvious, ask the user.
 ### Where to look
 
 - `workflows/workflows-list.tsv` — every workflow in the workspace, drafts included (`action`, `name`, `automation_type`, `state`, `active`). Callable right now only when `automation_type=on_demand`, `state=published`/`modified`, and `active=true` — its `action` column is the exact `automations.<uuid>` string to put in the step. Written by `list_workflows`; re-run it if the file looks stale. `agents/agents-list.tsv` is the equivalent for agents (`published`/`modified` rows are callable), written by `list_agents`.
-- `${CLAUDE_PLUGIN_DATA}/catalog/connections.tsv` — every connection (`name`, `type_name`).
+- `connections/connections.tsv` (repo file) — every connection (`name`, `type_name`).
 
 Grep these first; only call `fetch_automation` / `list_connections` live when you need more detail. Drafts are listed too — see the last rule of the draft-vs-published section. You don't need one to avoid duplicates: `save_automation` matches the name live across all packs and updates that workflow in place.
 
