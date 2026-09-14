@@ -14,6 +14,27 @@ Layout (see [skills/generating-workflow/reference/looking-up-actions.md](skills/
 
 If the catalog is missing when you need it, **stop and route the user through the `setup-blink-plugin` skill** — the hook couldn't populate it (usually means `userConfig` isn't set). Don't try to recover from inside another skill.
 
+## Workflows live in this repo, not the catalog
+
+`workflows/workflows-list.tsv` lists every workflow (automation/playbook) in the workspace, drafts
+included — id, name, `automation_type`, state (`draft`/`published`/`modified`), and `active`.
+It's a repo file, written by `list_workflows` and kept
+in sync automatically after `save_automation` and `publish_automation`. Grep it first; re-run
+`list_workflows` if it looks stale (missing, old, or a workflow was just published elsewhere).
+
+A workflow is callable as a **subflow** (as a step, or as an agent's ability) only when its row
+shows `automation_type: on_demand`, `active: true`, and state `published` or `modified` — the
+draft alone is never callable. See the `subflows` skill for the full lifecycle.
+
+## Agents live in this repo too
+
+`agents/agents-list.tsv` lists every agent in the workspace, drafts included — `action`
+(`agents.<id>`), name, and state (`draft`/`published`/`modified`). It's a repo file, written
+by `list_agents` and kept in sync automatically after `save_agent` and `publish_agent`. Grep
+it first; re-run `list_agents` if it looks stale. An agent is callable as a workflow step only
+once its row is `published` or `modified` — a draft is never callable. See the
+`generating-agent` skill.
+
 ## Search scope
 
 Read and grep only inside:
