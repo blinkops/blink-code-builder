@@ -9,7 +9,6 @@ from typing import NamedTuple
 
 from blink_shared.config import catalog_root
 
-_AGENT_ACTION_PREFIX = "agents."
 _SUBFLOW_ACTION_PREFIX = "automations."
 
 
@@ -43,19 +42,6 @@ def catalog_subflow_ids(rows):
     Returns their UUIDs as a set — exactly the ids allowed as an ability."""
     return {row.action.removeprefix(_SUBFLOW_ACTION_PREFIX)
             for row in rows or () if row.kind == "subflow"}
-
-
-def catalog_agent_id_by_name(rows, name):
-    """Look up a published agent's id by name in catalog rows; returns None if absent.
-    The name column holds `<name> | <title>`, so it is split first. Case-insensitive,
-    matching the server."""
-    wanted = (name or "").strip().lower()
-    for row in rows or ():
-        if row.kind != "agent":
-            continue
-        if row.name.split(" | ", 1)[0].strip().lower() == wanted:
-            return row.action.removeprefix(_AGENT_ACTION_PREFIX)
-    return None
 
 
 def catalog_action_names(rows):

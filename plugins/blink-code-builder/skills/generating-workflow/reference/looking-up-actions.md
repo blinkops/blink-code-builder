@@ -15,7 +15,7 @@ catalog/
 ├── actions.tsv                        # greppable: full_name <TAB> service <TAB> description <TAB> connection_types
 ├── triggers.tsv                       # greppable: full_name <TAB> service <TAB> description
 ├── connections.tsv                    # greppable: name <TAB> type_name — the workspace's bound connections
-├── workspace_actions.tsv              # greppable: action <TAB> name <TAB> kind <TAB> category <TAB> description — the workspace's own callable actions (subflows, agents, templates)
+├── workspace_actions.tsv              # greppable: action <TAB> name <TAB> kind <TAB> category <TAB> description — the workspace's own callable actions (subflows, templates). Agents live in agents/agents-list.tsv in the repo instead — see the generating-agent skill.
 ├── actions/<service>/<name>.json      # one action's full detail
 └── triggers/<service>/<name>.json     # one trigger's full detail
 ```

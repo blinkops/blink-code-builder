@@ -28,7 +28,8 @@ from typing import NamedTuple
 import yaml
 from blink_shared.client import build_client, raise_for_status
 from blink_shared.config import agent_editor_url, workspace_base_url
-from ._catalog import read_workspace_actions, catalog_subflow_ids, catalog_agent_id_by_name
+from ._catalog import read_workspace_actions, catalog_subflow_ids
+from ._agents_list import DEFAULT_PATH as AGENTS_LIST_DEFAULT_PATH, read_agents_list, agent_id_by_name
 
 
 DEFAULT_AGENT_PACK = "Home"
@@ -271,29 +272,34 @@ def _agent_state(row):
     return "modified" if row.get("has_unpublished_changes") else "published"
 
 
-def list_agents():
-    """List every agent in the workspace, drafts included.
+def list_agents(output=""):
+    """List every agent in the workspace, drafts included, and write it to a TSV file in
+    the repo (default: agents/agents-list.tsv) — mirrors how get_tables_schema snapshots
+    tables. Returns a short summary; read the file for the actual rows.
 
-    Takes nothing; returns `<id>\\t<name>\\t<state>` lines plus a total.
-    The local catalog holds published agents only, so this is the only way to see a draft.
+    This is the only way to see a draft: workspace_actions.tsv (the catalog) holds
+    published agents only.
     """
     with build_client() as api:
         payload = raise_for_status(api.get("/agents")).json()
     rows = payload.get("results") if isinstance(payload, dict) else payload
+    rows = rows or []
 
     lines = [
         "# state: draft = never published | published = live, draft matches it | "
         "modified = live, but the draft has newer edits that are not published yet",
-        "# id\tname\tstate",
+        "# action\tname\ttitle\tstate",
     ]
-    for row in rows or []:
-        state = _agent_state(row)
-        name = row.get("name") or ""
-        if row.get("title"):
-            name += f" | {row['title']}"
-        lines.append(f"{row.get('id')}\t{name}\t{state}")
-    lines.append(f"total: {len(rows or [])}")
-    return "\n".join(lines)
+    for row in rows:
+        agent_id = row.get("id")
+        lines.append(f"agents.{agent_id}\t{row.get('name') or ''}\t{row.get('title') or ''}"
+                     f"\t{_agent_state(row)}")
+
+    out_path = Path(output) if output else AGENTS_LIST_DEFAULT_PATH
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text("\n".join(lines) + "\n")
+
+    return f"ok: wrote {out_path} ({len(rows)} agents)"
 
 
 def fetch_agent(ref, stdout=False, output=""):
@@ -458,20 +464,20 @@ class ExistingAgentError(RuntimeError):
 def _resolve_or_create_agent(api, name, explicit_id, allow_overwrite=False):
     """Decide which agent to write to, creating one if needed. Returns (agent_id, note).
 
-    Tries in order: the explicit id, the catalog by name, the server by name, then create.
+    Tries in order: the explicit id, agents-list.tsv by name, the server by name, then create.
     A name match raises ExistingAgentError unless `explicit_id` or `allow_overwrite` says the
     caller means that agent — otherwise "create an agent called X" would overwrite an existing X.
     """
     if explicit_id:
         return _resolve_agent_ref(explicit_id), "(--agent-id)"
 
-    catalog_id = catalog_agent_id_by_name(read_workspace_actions(), name)
-    if catalog_id:
+    listed_id = agent_id_by_name(read_agents_list(), name)
+    if listed_id:
         if not allow_overwrite:
-            raise ExistingAgentError(catalog_id)
-        return catalog_id, "(matched published agent by name)"
+            raise ExistingAgentError(listed_id)
+        return listed_id, "(matched agent by name in agents-list.tsv)"
 
-    # Not published, or the catalog is stale: ask the server. Names are unique per workspace,
+    # Not in agents-list.tsv, or it's stale: ask the server. Names are unique per workspace,
     # so a name filter is an exact lookup. This is what finds drafts.
     existing = _read_agent(api, name=name)
     if existing:

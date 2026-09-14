@@ -162,7 +162,7 @@ See the `subflows` skill for the full lifecycle (create, publish, call, reuse). 
 
 See the `generating-agent` skill for the full lifecycle (configure, save, publish, connect). Short version:
 
-- **Calling one as a step:** copy the `action` column of a `kind=agent` row in `${CLAUDE_PLUGIN_DATA}/catalog/workspace_actions.tsv` — that's the `agents.<uuid>` string (never call by name). Required input `task:` (plain-language goal), optional `output_schema:` for structured output; the result is at `{{ steps.<id>.output.agent_output }}`.
+- **Calling one as a step:** copy the `action` column of `agents/agents-list.tsv` (in the repo, not the catalog — regenerate with `list_agents` if it looks stale) — that's the `agents.<uuid>` string (never call by name). Required input `task:` (plain-language goal), optional `output_schema:` for structured output; the result is at `{{ steps.<id>.output.agent_output }}`.
 - **A workflow as an agent's ability:** an agent can only run **published, active, on-demand** workflows of this workspace — the same `kind=subflow` rows. Publish the workflow before attaching it.
 - **Ordering when the user wants both:** publish the callee first. Workflow-is-an-ability → workflow first; agent-is-a-step → agent first.
 - **"Give the agent the ability to do X with a vendor"** means author a small on-demand workflow that does X, publish it, then attach it — abilities are workflows only, never vendor actions.

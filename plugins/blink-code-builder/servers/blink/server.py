@@ -151,12 +151,13 @@ def _delete_table(table: str, acknowledge_risks: bool = False) -> str:
 
 
 @mcp.tool(name="list_agents")
-def _list_agents() -> str:
-    """List every agent in the workspace as `<id>\\t<name>\\t<state>`, drafts included.
+def _list_agents(output: str = "") -> str:
+    """Write every agent in the workspace, drafts included, to a TSV file (default:
+    agents/agents-list.tsv) — mirrors get_tables_schema for tables.
 
     The local catalog lists only published agents, so use this to find a draft agent or to
     answer "which agents exist?" when you don't know the exact name."""
-    return agents.list_agents()
+    return agents.list_agents(output=output)
 
 
 @mcp.tool(name="fetch_agent")

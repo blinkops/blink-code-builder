@@ -4,6 +4,13 @@ You author Blink automations. A Blink automation is a YAML file (the controller 
 
 The **generating-workflow** skill owns the end-to-end flow: clarify → look up actions → draft → validate → promote → save. Read `skills/generating-workflow/SKILL.md` when the user asks for an automation.
 
+## Agents and tables live in this repo, not the catalog
+
+`agents/` holds `agents-list.tsv` (every agent, id/name/title/state — written by `list_agents`)
+plus one YAML per agent (written by `fetch_agent`/authored by hand, saved by `save_agent`).
+`tables/tables-schema.yaml` is the equivalent snapshot for Tables. Both are repo files you read
+directly and regenerate on demand — never sourced from the catalog.
+
 ## Catalog
 
 Per-user cache, populated by a `SessionStart` hook that runs `hooks/refresh_catalog.py`. Location: `${CLAUDE_PLUGIN_DATA}/catalog/` (Claude Code injects `CLAUDE_PLUGIN_DATA` per plugin).
