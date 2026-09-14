@@ -1,9 +1,9 @@
 """Reads of workflows-list.tsv and agents-list.tsv, shared by agents.py and pipeline.py so
 each file has one parser.
 
-Both are repo files (not the per-session catalog): list_workflows() (pipeline.py) and
-list_agents() (agents.py) write them, and each is kept in sync after its own save/publish.
-Each lists every workflow/agent in the workspace, drafts included.
+Repo files: list_workflows() (pipeline.py) and list_agents() (agents.py) write them, and
+each is kept in sync after its own save/publish. Each lists every workflow/agent in the
+workspace, drafts included.
 Imported by the sibling modules in this directory.
 """
 

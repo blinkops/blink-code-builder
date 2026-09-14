@@ -8,8 +8,7 @@ Each caller formats the rows for its own output — this returns data, not text.
 from .client import raise_for_status
 from .config import workspace_root
 
-# Repo-local snapshot written by the refresh_workspace hook — lives alongside
-# workspace/agents/ and workspace/tables/, not the catalog cache.
+# Written by the refresh_workspace hook on every session start.
 DEFAULT_PATH = workspace_root() / "connections" / "connections.tsv"
 
 
