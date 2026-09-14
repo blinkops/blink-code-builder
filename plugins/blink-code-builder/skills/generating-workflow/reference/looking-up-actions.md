@@ -36,7 +36,7 @@ The workspace's own callable actions — its workflows and agents — live in th
 
 `workspace/connections/connections.tsv` is a snapshot of the connections bound in this workspace, rewritten in full on every session start. Use it to pick a connection name for a step (see [../SKILL.md](../SKILL.md) — Connections).
 
-`workspace/workflows/workflows-list.tsv` and `workspace/agents/agents-list.tsv` list every workflow/agent, drafts included — a row is callable right now only once it's published (workflows also need `automation_type=on_demand` and `active=true`). Written by `list_workflows`/`list_agents`; re-run if a file looks stale. You never need these to avoid duplicates when saving: `save_automation`/`save_agent` look the name up live and update that workflow/agent in place.
+`workspace/workflows/workflows-list.tsv` and `workspace/agents/agents-list.tsv` list every workflow/agent, drafts included — a row is callable right now only once it's published (workflows also need `automation_type=on_demand` and `active=true`). Rewritten every session by the `SessionStart` hook, and after each save/publish; re-run `list_workflows`/`list_agents` if a file looks stale mid-session. You never need these to avoid duplicates when saving: `save_automation`/`save_agent` look the name up live and update that workflow/agent in place.
 
 ## Lookup flow
 

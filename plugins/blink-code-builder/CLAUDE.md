@@ -29,9 +29,9 @@ catalog.
 
 `workspace/workflows/workflows-list.tsv` lists every workflow (automation/playbook) in the workspace, drafts
 included — id, name, `automation_type`, state (`draft`/`published`/`modified`), and `active`.
-It's a repo file, written by `list_workflows` and kept
-in sync automatically after `save_automation` and `publish_automation`. Grep it first; re-run
-`list_workflows` if it looks stale (missing, old, or a workflow was just published elsewhere).
+It's a repo file, rewritten by the `SessionStart` hook and kept in sync
+automatically after `save_automation` and `publish_automation`. Grep it first; re-run
+`list_workflows` if it looks stale (a workflow was just published elsewhere mid-session).
 
 A workflow is callable as a **subflow** (as a step, or as an agent's ability) only when its row
 shows `automation_type: on_demand`, `active: true`, and state `published` or `modified` — the
@@ -45,9 +45,8 @@ Each workflow that's been fetched also has its own YAML file, written by `fetch_
 
 `workspace/agents/agents-list.tsv` lists every agent in the workspace, drafts included — id,
 name, and state (`draft`/`published`/`modified`). A step calls an agent as `agents.<id>`.
-It's a repo file, written
-by `list_agents` and kept in sync automatically after `save_agent` and `publish_agent`. Grep
-it first; re-run `list_agents` if it looks stale. An agent is callable as a workflow step only
+It's a repo file, rewritten by the `SessionStart` hook and kept in sync automatically after
+`save_agent` and `publish_agent`. Grep it first; re-run `list_agents` if it looks stale. An agent is callable as a workflow step only
 once its row is `published` or `modified` — a draft is never callable. See the
 `generating-agent` skill.
 
@@ -59,15 +58,16 @@ that agent's config, written by `fetch_agent` (or authored by hand) and saved wi
 
 ### Connections
 
-`workspace/connections/connections.tsv` lists every connection bound in the workspace (name, type). It's
-kept fresh automatically by the same `SessionStart` hook that populates the catalog
-(`hooks/refresh_workspace.py`), and refreshed again after every `publish_automation` call.
+`workspace/connections/connections.tsv` lists every connection bound in the workspace (name, type).
+It's written by the same `SessionStart` hook (`hooks/refresh_workspace.py`) that refreshes the
+workflow and agent lists, and refreshed again after every `publish_automation` call.
 
 ### Tables
 
 `workspace/tables/tables-schema.yaml` is a single YAML file listing every table in the workspace together
 with its schema (columns, types, etc.) — it does **not** contain the tables' data (records).
-Regenerated on demand from `get_tables_schema`. See the **managing-tables** skill to create or
+Regenerated on demand from `get_tables_schema` (it costs one call per table, so the
+`SessionStart` hook leaves it alone), and after `create_table`/`edit_table`/`delete_table`. See the **managing-tables** skill to create or
 edit a table's structure directly in Blink, and the **tables** skill to connect a table to a
 workflow (read/write rows from inside a workflow step).
 

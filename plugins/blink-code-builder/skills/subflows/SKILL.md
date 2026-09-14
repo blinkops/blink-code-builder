@@ -100,7 +100,7 @@ If the request doesn't make the choice obvious, ask the user.
 
 ### Where to look
 
-- `workspace/workflows/workflows-list.tsv` — every workflow in the workspace, drafts included (`id`, `name`, `automation_type`, `state`, `active`). Callable right now only when `automation_type=on_demand`, `state=published`/`modified`, and `active=true` — the step's action is `automations.<id>`, built from its `id` column. Written by `list_workflows`; re-run it if the file looks stale. `workspace/agents/agents-list.tsv` is the equivalent for agents (`published`/`modified` rows are callable), written by `list_agents`.
+- `workspace/workflows/workflows-list.tsv` — every workflow in the workspace, drafts included (`id`, `name`, `automation_type`, `state`, `active`). Callable right now only when `automation_type=on_demand`, `state=published`/`modified`, and `active=true` — the step's action is `automations.<id>`, built from its `id` column. Refreshed at session start and after each save/publish; re-run `list_workflows` if the file looks stale mid-session. `workspace/agents/agents-list.tsv` is the equivalent for agents (`published`/`modified` rows are callable), refreshed the same way by `list_agents`.
 - `workspace/connections/connections.tsv` (repo file) — every connection (`name`, `type_name`).
 
 Grep these first; only call `fetch_automation` / `list_connections` live when you need more detail. Drafts are listed too — see the last rule of the draft-vs-published section. You don't need one to avoid duplicates: `save_automation` matches the name live across all packs and updates that workflow in place.
