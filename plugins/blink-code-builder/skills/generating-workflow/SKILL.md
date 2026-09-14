@@ -1,7 +1,7 @@
 ---
 name: generating-workflow
 description: Authors a Blink automation as YAML from a natural-language prompt, validates it against the local action catalog, and saves it as a draft in the user's Blink workspace. Use when the user asks to create, build, author, or scaffold a Blink automation, workflow, playbook, or runbook.
-allowed-tools: Read, Write, Edit, Glob, Grep, WebSearch, mcp__plugin_blink-code-builder_blink__list_connections, mcp__plugin_blink-code-builder_blink__fetch_automation, mcp__plugin_blink-code-builder_blink__fetch_options, mcp__plugin_blink-code-builder_blink__validate_automation, mcp__plugin_blink-code-builder_blink__save_automation, mcp__plugin_blink-code-builder_blink__trigger_test_run, mcp__plugin_blink-code-builder_blink__get_run_log, mcp__plugin_blink-code-builder_blink__publish_automation
+allowed-tools: Read, Write, Edit, Glob, Grep, WebSearch, mcp__plugin_blink-code-builder_blink__list_connections, mcp__plugin_blink-code-builder_blink__list_workflows, mcp__plugin_blink-code-builder_blink__fetch_automation, mcp__plugin_blink-code-builder_blink__fetch_options, mcp__plugin_blink-code-builder_blink__validate_automation, mcp__plugin_blink-code-builder_blink__save_automation, mcp__plugin_blink-code-builder_blink__trigger_test_run, mcp__plugin_blink-code-builder_blink__get_run_log, mcp__plugin_blink-code-builder_blink__publish_automation
 user-invocable: false
 ---
 
@@ -155,15 +155,15 @@ Don't pre-populate or modify this file unless the user asks (or they accept the 
 See the `subflows` skill for the full lifecycle (create, publish, call, reuse). Short version:
 
 - **Creating one:** author it like any other automation in this skill (`automation_type: on_demand`), but run it through its own full loop — validate, save, test — **and publish it** before any parent references it. Publishing is what activates it and makes it callable; a workflow that was never published can't be called at all.
-- **Calling one as a step:** copy the `action` column of a `kind=subflow` row in `${CLAUDE_PLUGIN_DATA}/catalog/workspace_actions.tsv` — that's the `automations.<uuid>` string (never call by name). Every row there is callable right now, and the step runs the **published** version unless you set `configuration.run_draft: true`, which is for testing only and must not be left in finished work.
-- **Reuse before rebuild — but only on an exact match:** grep `${CLAUDE_PLUGIN_DATA}/catalog/workspace_actions.tsv` for candidates, then `fetch_automation` and **read** the candidate: what it does, its `inputs:`, its output, its side effects. Reuse it only if it does exactly what this step needs; if it's only partly right, say so in one line and author a new workflow instead — never bend an existing active subflow to fit. Drafts aren't listed there (nothing local lists them), so if the user points at a workflow that isn't in the file, `fetch_automation` it and ask whether to publish it — it can't be called until then.
+- **Calling one as a step:** copy the `action` column of a row in `workflows/workflows-list.tsv` (in the repo, not the catalog — regenerate with `list_workflows` if it looks stale) — that's the `automations.<uuid>` string (never call by name). Callable only when the row shows `automation_type: on_demand`, `active: true`, and state `published` or `modified`; the step runs the **published** version unless you set `configuration.run_draft: true`, which is for testing only and must not be left in finished work.
+- **Reuse before rebuild — but only on an exact match:** grep `workflows/workflows-list.tsv` for candidates, then `fetch_automation` and **read** the candidate: what it does, its `inputs:`, its output, its side effects. Reuse it only if it does exactly what this step needs; if it's only partly right, say so in one line and author a new workflow instead — never bend an existing active subflow to fit. Drafts are listed too (state `draft`), so if the user points at one, tell them it must be published before it's callable.
 
 ## Agents — calling an agent, or building one
 
 See the `generating-agent` skill for the full lifecycle (configure, save, publish, connect). Short version:
 
-- **Calling one as a step:** copy the `action` column of a `kind=agent` row in `${CLAUDE_PLUGIN_DATA}/catalog/workspace_actions.tsv` — that's the `agents.<uuid>` string (never call by name). Required input `task:` (plain-language goal), optional `output_schema:` for structured output; the result is at `{{ steps.<id>.output.agent_output }}`.
-- **A workflow as an agent's ability:** an agent can only run **published, active, on-demand** workflows of this workspace — the same `kind=subflow` rows. Publish the workflow before attaching it.
+- **Calling one as a step:** copy the `action` column of a `published`/`modified` row in `agents/agents-list.tsv` (in the repo, not the catalog — regenerate with `list_agents` if it looks stale) — that's the `agents.<uuid>` string (never call by name). Required input `task:` (plain-language goal), optional `output_schema:` for structured output; the result is at `{{ steps.<id>.output.agent_output }}`.
+- **A workflow as an agent's ability:** an agent can only run **published, active, on-demand** workflows of this workspace — the same rows in `workflows/workflows-list.tsv`. Publish the workflow before attaching it.
 - **Ordering when the user wants both:** publish the callee first. Workflow-is-an-ability → workflow first; agent-is-a-step → agent first.
 - **"Give the agent the ability to do X with a vendor"** means author a small on-demand workflow that does X, publish it, then attach it — abilities are workflows only, never vendor actions.
 

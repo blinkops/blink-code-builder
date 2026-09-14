@@ -15,7 +15,7 @@ import yaml
 from ._blink import resolve_playbook_ref, update_draft, update_id_cache, cached_playbook_id, \
     list_packs, find_playbook_across_packs, record_test_evidence, load_test_evidence, \
     yaml_digest, iter_steps, flatten_steps
-from ._catalog import read_workspace_actions, catalog_action_names
+from ._catalog import workspace_action_names
 from ._safety import scan_blast_radius
 from blink_shared.client import build_client, raise_for_status
 from blink_shared.config import catalog_root, editor_url, workspace_base_url
@@ -548,7 +548,7 @@ def _validate_triggers(automation, triggers_catalog):
 def _validate_agent_step_inputs(step):
     """Check an `agents.<uuid>` step's inputs against the RunAgent contract.
 
-    Needed because workspace_actions.tsv has no parameter list, so `_check_step_readiness`
+    Needed because agents-list.tsv has no parameter list, so `_check_step_readiness`
     can't see that `task` is required — a step missing it would otherwise be reported READY
     and then fail at run time. Unknown names are only a warning: if the action ever gains a
     parameter, a stale list here must not block a valid workflow.
@@ -580,9 +580,9 @@ def _validate_workspace_action_call(step, action_name, workspace_actions):
     """`automations.<uuid>` (subflow) and `agents.<uuid>` (agent) steps call something the
     workspace owns. Neither is ever reliable to check against the vendor actions catalog —
     both actions are created at publish time and the vendor catalog can lag up to 7 days —
-    so check workspace_actions.tsv instead, which the SessionStart hook refreshes every
-    session and again after every publish. Presence there *is* callability: the controller
-    exposes these actions only while the target is published and active."""
+    so check workflows-list.tsv / agents-list.tsv instead, which are kept in sync after every
+    save and publish. Presence there *is* callability: the controller exposes these actions
+    only while the target is published and active."""
     if workspace_actions is None:
         return []  # workspace snapshot unavailable: can't verify, don't false-flag
     if action_name in workspace_actions:
@@ -592,14 +592,14 @@ def _validate_workspace_action_call(step, action_name, workspace_actions):
             f"[ERROR] step {step.get('id')}: agent {action_name!r} is not callable in this "
             "workspace. Either the id is wrong, or the agent has never been published — an "
             "agent becomes callable only when published. Copy the `action` column of a "
-            "kind=agent row in workspace_actions.tsv, or publish the agent first "
+            "published/modified row in agents-list.tsv, or publish the agent first "
             "(see the generating-agent skill)."
         ]
     return [
         f"[ERROR] step {step.get('id')}: action {action_name!r} is not callable in this workspace. "
         "Either the id is wrong, or the target workflow isn't published and active — only a "
         "published, active on_demand workflow is callable as a subflow. Copy the `action` column "
-        "of a kind=subflow row in workspace_actions.tsv, or publish the target workflow first."
+        "of a callable row in workflows-list.tsv, or publish the target workflow first."
     ]
 
 
@@ -931,7 +931,7 @@ def validate_automation(path, allow_missing_catalog=False):
         actions_catalog = {}
 
     triggers_catalog = _load_triggers_catalog()
-    workspace_actions = catalog_action_names(read_workspace_actions())
+    workspace_actions = workspace_action_names()
 
     errors, warnings = _validate(automation, actions_catalog, triggers_catalog, workspace_actions, catalog_available)
     errors = duplicate_key_errors + errors
@@ -995,8 +995,8 @@ def list_workflows(output=""):
     """List every workflow in the workspace, drafts included, and write it to a TSV file in
     the repo (default: workflows/workflows-list.tsv) — mirrors get_tables_schema for tables.
 
-    This is the only local way to see a draft or inactive workflow: workspace_actions.tsv
-    (the catalog) lists only workflows that are published, active, and on-demand.
+    This is the only local way to see a draft or inactive workflow — a row that isn't
+    `on_demand`/`active`/`published`-or-`modified` isn't callable as a subflow yet.
     """
     with build_client() as api:
         packs = list_packs(api)
