@@ -1,25 +1,6 @@
-"""Answers questions about the workspace's workflows and agents from local files.
-
-Two TSV files list everything in the workspace, drafts included:
-`list_workflows()` (pipeline.py) writes workspace/workflows/workflows-list.tsv, and
-`list_agents()` (agents.py) writes workspace/agents/agents-list.tsv. This module is the
-only reader of both, so the two writers share one parser and one idea of what a row means.
-
-No network calls here — that is the point. Three callers use it to answer a question
-about the workspace without waiting on the Blink API:
-
-  validate_automation  is this step's `action:` a real, callable workflow or agent?
-  validate_agent       are this agent's abilities real, callable workflows?
-  save_agent           does an agent with this name already exist, so update it in place
-                       instead of creating a duplicate?
-
-"Callable" is the recurring question, and it is not the same as "exists": a draft is
-listed but cannot be called, and a workflow also has to be on-demand and active. That
-rule lives in the `is_callable` property of each row class, so no caller re-implements it.
-
-A caller that cannot find a file gets None, not an empty result — "I could not check" has
-to stay distinguishable from "I checked and there is nothing", or a stale checkout would
-turn into a wall of false errors.
+"""Reads workflows-list.tsv and agents-list.tsv so validate_automation, validate_agent and
+save_agent can check what exists and what is callable without calling the Blink API.
+A missing file gives None, never an empty result, so "couldn't check" stays visible.
 """
 
 from pathlib import Path
