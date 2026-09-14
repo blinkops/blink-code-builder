@@ -27,7 +27,7 @@ from pathlib import Path
 from typing import NamedTuple
 import yaml
 from blink_shared.client import build_client, raise_for_status
-from blink_shared.config import agent_editor_url, workspace_base_url
+from blink_shared.config import agent_editor_url, workspace_base_url, workspace_root
 from ._catalog import AGENTS_LIST_PATH, callable_workflow_ids, agent_id_by_name
 
 
@@ -274,7 +274,7 @@ def _agent_state(row):
 
 def list_agents(output=""):
     """List every agent in the workspace, drafts included, and write it to a TSV file in the
-    repo (default: agents/agents-list.tsv) — mirrors list_workflows for workflows.
+    repo (default: workspace/agents/agents-list.tsv) — mirrors list_workflows for workflows.
 
     This is the only local way to see a draft agent — an agent becomes callable as
     `agents.<id>` only once published.
@@ -315,7 +315,7 @@ def fetch_agent(ref, stdout=False, output=""):
     """Download an agent from the workspace and write it as local YAML.
 
     Gets an agent id or an agent-builder URL. Returns the YAML text if `stdout`, else a
-    summary of the file it wrote (`output`, or agents/<name>.yaml). Fetches the draft
+    summary of the file it wrote (`output`, or workspace/agents/<name>.yaml). Fetches the draft
     version, since that is what save_agent writes back.
     """
     api = build_client()
@@ -334,7 +334,7 @@ def fetch_agent(ref, stdout=False, output=""):
         return yaml_text
 
     out_path = (Path(output) if output
-                else Path("agents") / f"{_safe_filename(config.name, agent_id)}.yaml")
+                else workspace_root() / "agents" / f"{_safe_filename(config.name, agent_id)}.yaml")
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(yaml_text)
 

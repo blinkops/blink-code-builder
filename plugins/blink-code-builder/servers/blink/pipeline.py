@@ -15,10 +15,10 @@ import yaml
 from ._blink import resolve_playbook_ref, update_draft, update_id_cache, cached_playbook_id, \
     list_packs, find_playbook_across_packs, record_test_evidence, load_test_evidence, \
     yaml_digest, iter_steps, flatten_steps
-from ._catalog import workspace_action_names
+from ._catalog import workspace_action_names, WORKFLOWS_LIST_PATH
 from ._safety import scan_blast_radius
 from blink_shared.client import build_client, raise_for_status
-from blink_shared.config import catalog_root, editor_url, workspace_base_url
+from blink_shared.config import catalog_root, editor_url, workspace_base_url, workspace_root
 
 
 TRUNCATE_LIMIT = 600
@@ -29,8 +29,8 @@ DEFAULT_PACK = "blink-code-builder"
 MESSAGE_SEPARATOR = b"%%%%_____________%%%%BLINK_MESSAGE%%%%_____________%%%%"
 END_EXECUTION_COMMAND = "EndExecution"
 MAX_WAIT_SECONDS = 600
-ALLOWLIST_PATH = Path("workflows/connections-allowlist.yaml")
-WORKFLOWS_LIST_PATH = Path("workflows") / "workflows-list.tsv"
+ALLOWLIST_PATH = workspace_root() / "workflows" / "connections-allowlist.yaml"
+# WORKFLOWS_LIST_PATH is imported from ._catalog — one definition, shared with agents.py.
 
 AUTOMATION_TYPES = {"on_demand", "scheduled", "event"}
 WORKFLOW_ACTION_PREFIX = "automations."
@@ -993,7 +993,7 @@ def _workflow_state(automation):
 
 def list_workflows(output=""):
     """List every workflow in the workspace, drafts included, and write it to a TSV file in
-    the repo (default: workflows/workflows-list.tsv) — mirrors get_tables_schema for tables.
+    the repo (default: workspace/workflows/workflows-list.tsv) — mirrors get_tables_schema for tables.
 
     This is the only local way to see a draft or inactive workflow — a row that isn't
     `on_demand`/`active`/`published`-or-`modified` isn't callable as a subflow yet.
@@ -1308,7 +1308,7 @@ def trigger_test_run(playbook_id, acknowledge_risks=False):
 
     Before opening the run, three gates (a test run is NOT a dry run — it executes real
     actions against real systems, see reference/safety.md):
-      1. Connections allowlist (`workflows/connections-allowlist.yaml`, a YAML list of
+      1. Connections allowlist (`workspace/workflows/connections-allowlist.yaml`, a YAML list of
          connection names). Any step-level connection not on the list → `[BLOCKED
          CONNECTIONS]` block so the SKILL flow can offer to extend the allowlist.
       2. Human-wait scan. A step that waits for a human (internal.Sleep with

@@ -5,13 +5,12 @@ workspace the same way; if this query ever gains paging or a filter, both follow
 Each caller formats the rows for its own output — this returns data, not text.
 """
 
-from pathlib import Path
-
 from .client import raise_for_status
+from .config import workspace_root
 
 # Repo-local snapshot written by the refresh_workspace hook — lives alongside
-# agents/agents-list.tsv and tables/tables-schema.yaml, not the catalog cache.
-DEFAULT_PATH = Path("connections") / "connections.tsv"
+# workspace/agents/ and workspace/tables/, not the catalog cache.
+DEFAULT_PATH = workspace_root() / "connections" / "connections.tsv"
 
 
 def fetch_connections(client):

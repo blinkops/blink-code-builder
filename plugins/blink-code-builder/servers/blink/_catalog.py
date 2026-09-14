@@ -7,10 +7,10 @@ Each lists every workflow/agent in the workspace, drafts included.
 Imported by the sibling modules in this directory.
 """
 
-from pathlib import Path
+from blink_shared.config import workspace_root
 
-WORKFLOWS_LIST_PATH = Path("workflows") / "workflows-list.tsv"
-AGENTS_LIST_PATH = Path("agents") / "agents-list.tsv"
+WORKFLOWS_LIST_PATH = workspace_root() / "workflows" / "workflows-list.tsv"
+AGENTS_LIST_PATH = workspace_root() / "agents" / "agents-list.tsv"
 
 _WORKFLOW_ACTION_PREFIX = "automations."
 _AGENT_ACTION_PREFIX = "agents."

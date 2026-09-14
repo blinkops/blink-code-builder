@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Snapshot the workspace's connections.
 
-SessionStart hook. Writes connections/connections.tsv (a repo file, alongside
-agents/ and tables/) on every session — workspace data changes often, so there's no
-staleness gate here (refresh_catalog.py, the vendor catalog, caches for up to 7 days).
+SessionStart hook. Writes workspace/connections/connections.tsv (a repo file, alongside
+workspace/agents/ and workspace/tables/) on every session — workspace data changes often,
+so there's no staleness gate here (refresh_catalog.py, the vendor catalog, caches for up
+to 7 days).
 
 Config: CLAUDE_PLUGIN_OPTION_BLINK_{CONTROLLER_URL,USER_API_KEY,WORKSPACE_ID}.
 """

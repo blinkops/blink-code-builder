@@ -22,7 +22,7 @@ request is unclear.
 
 ## Look up existing tables first
 
-Read `tables/tables-schema.yaml` in the user's repo (or call `get_tables_schema` if it's
+Read `workspace/tables/tables-schema.yaml` in the user's repo (or call `get_tables_schema` if it's
 missing) before creating a table, to avoid creating a near-duplicate of one that already
 exists.
 
@@ -62,7 +62,7 @@ create_table(
 )
 ```
 
-This syncs `tables/tables-schema.yaml` automatically on success — no separate refresh step.
+This syncs `workspace/tables/tables-schema.yaml` automatically on success — no separate refresh step.
 
 `with_default_fields=True` adds a generic "Name" (text) and "Number" (number) column.
 Only pass it when the user hasn't described their own columns — otherwise it leaves two

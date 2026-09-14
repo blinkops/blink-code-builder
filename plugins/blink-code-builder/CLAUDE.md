@@ -27,7 +27,7 @@ catalog.
 
 ### Workflows
 
-`workflows/workflows-list.tsv` lists every workflow (automation/playbook) in the workspace, drafts
+`workspace/workflows/workflows-list.tsv` lists every workflow (automation/playbook) in the workspace, drafts
 included — id, name, `automation_type`, state (`draft`/`published`/`modified`), and `active`.
 It's a repo file, written by `list_workflows` and kept
 in sync automatically after `save_automation` and `publish_automation`. Grep it first; re-run
@@ -38,29 +38,29 @@ shows `automation_type: on_demand`, `active: true`, and state `published` or `mo
 draft alone is never callable. See the `subflows` skill for the full lifecycle.
 
 Each workflow that's been fetched also has its own YAML file, written by `fetch_automation` to
-`workflows/<name>.yaml` and saved back with `save_automation`.
+`workspace/workflows/<name>.yaml` and saved back with `save_automation`.
 
 ### Agents
 
-`agents/agents-list.tsv` lists every agent in the workspace, drafts included — `action`
+`workspace/agents/agents-list.tsv` lists every agent in the workspace, drafts included — `action`
 (`agents.<id>`), name, and state (`draft`/`published`/`modified`). It's a repo file, written
 by `list_agents` and kept in sync automatically after `save_agent` and `publish_agent`. Grep
 it first; re-run `list_agents` if it looks stale. An agent is callable as a workflow step only
 once its row is `published` or `modified` — a draft is never callable. See the
 `generating-agent` skill.
 
-Each agent that's been fetched also has its own YAML file under `agents/` — a full export of
+Each agent that's been fetched also has its own YAML file under `workspace/agents/` — a full export of
 that agent's config, written by `fetch_agent` (or authored by hand) and saved with `save_agent`.
 
 ### Connections
 
-`connections/connections.tsv` lists every connection bound in the workspace (name, type). It's
+`workspace/connections/connections.tsv` lists every connection bound in the workspace (name, type). It's
 kept fresh automatically by the same `SessionStart` hook that populates the catalog
 (`hooks/refresh_workspace.py`), and refreshed again after every `publish_automation` call.
 
 ### Tables
 
-`tables/tables-schema.yaml` is a single YAML file listing every table in the workspace together
+`workspace/tables/tables-schema.yaml` is a single YAML file listing every table in the workspace together
 with its schema (columns, types, etc.) — it does **not** contain the tables' data (records).
 Regenerated on demand from `get_tables_schema`. See the **managing-tables** skill to create or
 edit a table's structure directly in Blink, and the **tables** skill to connect a table to a

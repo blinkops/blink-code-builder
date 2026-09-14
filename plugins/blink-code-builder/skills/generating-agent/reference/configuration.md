@@ -105,7 +105,7 @@ Each entry:
 | `summarize_output` | `false` | Have the output summarized before the agent reasons on it. Use for large outputs. |
 | `summarize_output_instructions` | `""` | What the summary should keep. Only meaningful with `summarize_output: true`. |
 
-Get `ability_id` from `workflows/workflows-list.tsv`: a callable row's (`automation_type=
+Get `ability_id` from `workspace/workflows/workflows-list.tsv`: a callable row's (`automation_type=
 on_demand`, `state=published`/`modified`, `active=true`) `action` column is
 `automations.<uuid>` — the `ability_id` is that uuid without the prefix.
 
