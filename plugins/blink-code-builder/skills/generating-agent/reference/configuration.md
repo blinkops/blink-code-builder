@@ -105,9 +105,9 @@ Each entry:
 | `summarize_output` | `false` | Have the output summarized before the agent reasons on it. Use for large outputs. |
 | `summarize_output_instructions` | `""` | What the summary should keep. Only meaningful with `summarize_output: true`. |
 
-Get `ability_id` from `${CLAUDE_PLUGIN_DATA}/catalog/workspace_actions.tsv`: a `kind=subflow`
-row's `action` column is `automations.<uuid>` — the `ability_id` is that uuid without the
-prefix.
+Get `ability_id` from `workflows/workflows-list.tsv`: a callable row's (`automation_type=
+on_demand`, `state=published`/`modified`, `active=true`) `action` column is
+`automations.<uuid>` — the `ability_id` is that uuid without the prefix.
 
 An ability can **only** be a workflow. There is no ability type for a vendor action, and no
 way to attach another workspace's workflow. To give the agent a vendor capability, wrap the

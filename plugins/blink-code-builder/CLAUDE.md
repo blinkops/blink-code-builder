@@ -26,6 +26,15 @@ A workflow is callable as a **subflow** (as a step, or as an agent's ability) on
 shows `automation_type: on_demand`, `active: true`, and state `published` or `modified` — the
 draft alone is never callable. See the `subflows` skill for the full lifecycle.
 
+## Agents live in this repo too
+
+`agents/agents-list.tsv` lists every agent in the workspace, drafts included — `action`
+(`agents.<id>`), name, and state (`draft`/`published`/`modified`). It's a repo file, written
+by `list_agents` and kept in sync automatically after `save_agent` and `publish_agent`. Grep
+it first; re-run `list_agents` if it looks stale. An agent is callable as a workflow step only
+once its row is `published` or `modified` — a draft is never callable. See the
+`generating-agent` skill.
+
 ## Search scope
 
 Read and grep only inside:
