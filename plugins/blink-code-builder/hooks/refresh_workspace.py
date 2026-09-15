@@ -24,6 +24,9 @@ def write_tsv(path, header, rows):
 
 
 def refresh_connections():
+    # These imports sit inside the function on purpose: they need the httpx package,
+    # which main() installs only at runtime. Importing at the top of the file would run
+    # before that install and fail. Same for the other refresh functions below.
     from blink_shared.client import build_client
     from blink_shared.connections import CONNECTIONS_PATH, fetch_connections
 
@@ -50,14 +53,21 @@ def refresh_agents():
 
 
 def refresh():
-    # Imported inside each refresh, not at the top: httpx exists only once main() has
-    # installed it, and an unconfigured session returns before that happens.
-    for step in (refresh_connections, refresh_workflows, refresh_agents):
-        try:
-            print(step(), file=sys.stderr)
-        except Exception as exc:
-            # One failing read must not cost the others their refresh.
-            print(f"warning: {step.__name__} failed: {exc}", file=sys.stderr)
+    # Each refresh gets its own try/except: one failing read must not cost the others.
+    try:
+        print(refresh_connections(), file=sys.stderr)
+    except Exception as exc:
+        print(f"warning: connections refresh failed: {exc}", file=sys.stderr)
+
+    try:
+        print(refresh_workflows(), file=sys.stderr)
+    except Exception as exc:
+        print(f"warning: workflows refresh failed: {exc}", file=sys.stderr)
+
+    try:
+        print(refresh_agents(), file=sys.stderr)
+    except Exception as exc:
+        print(f"warning: agents refresh failed: {exc}", file=sys.stderr)
 
 
 def main():
