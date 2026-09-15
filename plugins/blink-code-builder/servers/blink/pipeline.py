@@ -1258,7 +1258,8 @@ def _start_test_run(api, base_url, playbook_id, draft, yaml_text):
     server (commit 9fd2139ba08, "delete-workflow-response-stream"), so we start the run
     over the plain endpoint and poll the execution instead.
 
-    Returns (execution_id, info_lines).
+    Returns (execution, info_lines), where execution is the terminal-state execution body —
+    callers don't need to re-fetch it.
     """
     body = _build_run_workflow_body(draft, playbook_id, yaml_text)
     execution = raise_for_status(api.post(f"/playbooks/{playbook_id}/start", json=body)).json()
@@ -1288,7 +1289,7 @@ def _start_test_run(api, base_url, playbook_id, draft, yaml_text):
             "note: the run is Paused — it's waiting on something (usually a human response). "
             "Its steps so far are below; resume or inspect it in the editor."
         )
-    return execution_id, lines
+    return execution, lines
 
 
 def trigger_test_run(playbook_id, acknowledge_risks=False):
@@ -1329,18 +1330,16 @@ def trigger_test_run(playbook_id, acknowledge_risks=False):
     if blocked:
         return blocked
 
-    execution_id, lines = _start_test_run(api, base_url, playbook_id, draft, yaml_text)
+    execution, lines = _start_test_run(api, base_url, playbook_id, draft, yaml_text)
     lines = safety_lines + lines
 
-    # Run reached a terminal state → one final fetch for the summary.
-    execution = raise_for_status(api.get(f"/executions/{execution_id}")).json()
     state = _execution_state(execution)
     lines.append(f"state: {state or '<none>'}")
     if execution.get("step_results"):
         lines.append(f"step_results: {execution['step_results']}")
     if state == "Completed":
         # Unlocks publish_automation's [BLOCKED UNTESTED] gate for this exact draft.
-        record_test_evidence(playbook_id, yaml_text, execution_id)
+        record_test_evidence(playbook_id, yaml_text, execution["id"])
     return "\n".join(lines)
 
 
