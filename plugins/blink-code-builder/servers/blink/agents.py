@@ -27,8 +27,8 @@ from pathlib import Path
 from typing import NamedTuple
 import yaml
 from blink_shared.client import build_client, raise_for_status
-from blink_shared.config import agent_editor_url, workspace_base_url
-from ._catalog import read_workspace_actions, catalog_subflow_ids, catalog_agent_id_by_name
+from blink_shared.config import agent_editor_url, workspace_base_url, workspace_root
+from ._workspace import AGENTS_LIST_PATH, callable_workflow_ids, agent_id_by_name
 
 
 DEFAULT_AGENT_PACK = "Home"
@@ -271,11 +271,12 @@ def _agent_state(row):
     return "modified" if row.get("has_unpublished_changes") else "published"
 
 
-def list_agents():
-    """List every agent in the workspace, drafts included.
+def list_agents(output=""):
+    """List every agent in the workspace, drafts included, and write it to a TSV file in the
+    repo (default: workspace/agents/agents-list.tsv).
 
-    Takes nothing; returns `<id>\\t<name>\\t<state>` lines plus a total.
-    The local catalog holds published agents only, so this is the only way to see a draft.
+    This is the only local way to see a draft agent — an agent becomes callable as
+    `agents.<id>` only once published.
     """
     with build_client() as api:
         payload = raise_for_status(api.get("/agents")).json()
@@ -286,22 +287,37 @@ def list_agents():
         "modified = live, but the draft has newer edits that are not published yet",
         "# id\tname\tstate",
     ]
+    total = 0
     for row in rows or []:
+        total += 1
         state = _agent_state(row)
         name = row.get("name") or ""
         if row.get("title"):
             name += f" | {row['title']}"
         lines.append(f"{row.get('id')}\t{name}\t{state}")
-    lines.append(f"total: {len(rows or [])}")
-    return "\n".join(lines)
+
+    out_path = Path(output) if output else AGENTS_LIST_PATH
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text("\n".join(lines) + "\n")
+
+    return f"ok: wrote {out_path} ({total} agents)"
+
+
+def _sync_agents_list():
+    try:
+        list_agents()
+    except Exception:
+        pass  # best effort; rerun list_agents if the local file falls out of sync
 
 
 def fetch_agent(ref, stdout=False, output=""):
     """Download an agent from the workspace and write it as local YAML.
 
     Gets an agent id or an agent-builder URL. Returns the YAML text if `stdout`, else a
-    summary of the file it wrote (`output`, or agents/<name>.yaml). Fetches the draft
-    version, since that is what save_agent writes back.
+    summary of the file it wrote (`output`, or workspace/agents/<name>.yaml).
+
+    An agent has two versions server-side, draft and published. This writes the draft,
+    so that editing the file and calling save_agent updates the same version you pulled.
     """
     api = build_client()
     agent_id = _resolve_agent_ref(ref)
@@ -319,7 +335,7 @@ def fetch_agent(ref, stdout=False, output=""):
         return yaml_text
 
     out_path = (Path(output) if output
-                else Path("agents") / f"{_safe_filename(config.name, agent_id)}.yaml")
+                else workspace_root() / "agents" / f"{_safe_filename(config.name, agent_id)}.yaml")
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(yaml_text)
 
@@ -382,16 +398,11 @@ def _validate_config(config):
                             "with NO human approval, in every future session. Publish will block "
                             "on this until the user explicitly approves.")
 
-    # Check every ability is a callable workflow:
-    #   1. dedupe the ability ids
-    #   2. look them up in the local catalog, which lists callable workflows only
-    #   3. on a miss, one live call says whether the workflow exists but is not callable, or
-    #      does not exist here at all — the two need different fixes
-    # Always warnings, never errors: the catalog is a local file and can be stale, so a
-    # workflow published in the UI a minute ago is missing from it but perfectly fine.
+    # Check every ability is a callable workflow, locally first, then live for the misses.
+    # Warnings only, never errors: the local file can be stale.
     unique_ids = list(dict.fromkeys(ability_ids))
-    subflow_ids = catalog_subflow_ids(read_workspace_actions())
-    unresolved = [aid for aid in unique_ids if aid not in subflow_ids]
+    callable_ids = callable_workflow_ids() or set()
+    unresolved = [aid for aid in unique_ids if aid not in callable_ids]
 
     if unresolved:
         try:
@@ -458,21 +469,22 @@ class ExistingAgentError(RuntimeError):
 def _resolve_or_create_agent(api, name, explicit_id, allow_overwrite=False):
     """Decide which agent to write to, creating one if needed. Returns (agent_id, note).
 
-    Tries in order: the explicit id, the catalog by name, the server by name, then create.
+    Tries in order: the explicit id, agents-list.tsv by name, the server by name, then create.
     A name match raises ExistingAgentError unless `explicit_id` or `allow_overwrite` says the
     caller means that agent — otherwise "create an agent called X" would overwrite an existing X.
     """
     if explicit_id:
         return _resolve_agent_ref(explicit_id), "(--agent-id)"
 
-    catalog_id = catalog_agent_id_by_name(read_workspace_actions(), name)
-    if catalog_id:
+    match = agent_id_by_name(name)
+    if match:
+        catalog_id, state = match
         if not allow_overwrite:
             raise ExistingAgentError(catalog_id)
-        return catalog_id, "(matched published agent by name)"
+        return catalog_id, f"(matched {state} agent by name)"
 
-    # Not published, or the catalog is stale: ask the server. Names are unique per workspace,
-    # so a name filter is an exact lookup. This is what finds drafts.
+    # Not in the local list, or it's stale: ask the server. Names are unique per workspace,
+    # so a name filter is an exact lookup. This is what finds drafts when the file is stale.
     existing = _read_agent(api, name=name)
     if existing:
         if not allow_overwrite:
@@ -545,6 +557,7 @@ def save_agent(path, agent_id="", allow_overwrite=False):
         return _blocked_exists(name, exc.args[0], "save_agent")
 
     _write_agent(api, config, resolved_id)
+    _sync_agents_list()
 
     lines = [f"[WARN] {msg}" for msg in warnings]
     lines.append(f"ok: saved agent draft {resolved_id} {note}")
@@ -624,6 +637,7 @@ def publish_agent(ref="", path="", acknowledge_risks=False, allow_overwrite=Fals
     if resp.status_code == 404:
         raise RuntimeError(f"agent {agent_id!r} not found (404) — check the id.")
     raise_for_status(resp)
+    _sync_agents_list()
 
     lines = [f"[WARN] {msg}" for msg in warnings]
     lines.append(f"ok: published agent {agent_id} — now callable from workflows as "
