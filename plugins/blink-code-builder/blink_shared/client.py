@@ -63,9 +63,16 @@ def raise_for_status(response):
     """Like `response.raise_for_status()`, but raises a RuntimeError carrying the response
     body — so a plain call surfaces the same readable error as the paths that hand-check
     specific status codes. Returns the response, for chaining.
+
+    Callers include streamed responses (`client.stream(...)`), whose body isn't
+    auto-read the way a plain `client.get()`/`client.post()` response's is — reading
+    it here before touching `.text` avoids httpx's `ResponseNotRead` masking the real
+    HTTP error.
     """
     try:
         response.raise_for_status()
     except httpx.HTTPStatusError as error:
+        if not error.response.is_closed:
+            error.response.read()
         raise RuntimeError(f"HTTP {error.response.status_code}: {error.response.text[:400]}") from error
     return response

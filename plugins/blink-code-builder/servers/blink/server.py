@@ -56,7 +56,7 @@ def _save_automation(path: str, playbook_id: str = "") -> str:
 
 @mcp.tool(name="trigger_test_run")
 def _trigger_test_run(playbook_id: str, acknowledge_risks: bool = False) -> str:
-    """Trigger a draft test run via the controller's streaming endpoint and block until it finishes.
+    """Trigger a draft test run and block until it finishes.
 
     Gated: connections allowlist, human-wait steps, and blast-radius scan. Pass
     acknowledge_risks=True only after the user explicitly approved the steps a

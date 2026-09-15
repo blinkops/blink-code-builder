@@ -5,6 +5,7 @@ import difflib
 import json
 import os
 import re
+import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -26,10 +27,17 @@ TRUNCATE_LIMIT = 600
 
 DEFAULT_PACK = "blink-code-builder"
 
-# Delimiter the run-streaming endpoint puts between messages.
-MESSAGE_SEPARATOR = b"%%%%_____________%%%%BLINK_MESSAGE%%%%_____________%%%%"
-END_EXECUTION_COMMAND = "EndExecution"
 MAX_WAIT_SECONDS = 600
+POLL_INTERVAL_SECONDS = 2
+
+# Execution states the controller treats as final (pkg/consts/execution.go). Paused is
+# final for our purposes too: the run is parked waiting on something (usually a human),
+# so polling it to the timeout would just burn the wait.
+PAUSED_EXECUTION_STATE = "Paused"
+TERMINAL_EXECUTION_STATES = {
+    "Completed", "Failed", "Cancelled", "Cancelled (not started)", "Timeout", "Skipped",
+    PAUSED_EXECUTION_STATE,
+}
 ALLOWLIST_PATH = workspace_root() / "workflows" / "connections-allowlist.yaml"
 
 AUTOMATION_TYPES = {"on_demand", "scheduled", "event"}
@@ -1217,95 +1225,78 @@ def _enforce_blast_radius_gate(yaml_text, acknowledged, publishing=False):
 
 
 def _build_run_workflow_body(draft, playbook_id, yaml_text):
-    """Build the request body for POST /playbooks/{id}/start/stream."""
-    runner = draft.get("runner") or ""
-    test_session_id = str(uuid.uuid4())
+    """Build the request body for POST /playbooks/{id}/start.
 
+    Matches the controller's `StartExecutionRequest`, which inlines the playbook fields
+    (`id`, `playbook`) alongside the run options.
+    """
     return {
         "id": playbook_id,
         "playbook": yaml_text,
         "input_values": {},
         "is_draft": True,
-        "test_session_id": test_session_id,
-        "runner": runner,
-        "command": {
-            "cmd_id": str(uuid.uuid4()),
-            "cmd_type": "RunWorkflow",
-            "params": {
-                "playbook_id": playbook_id,
-                "_Context": {
-                    "inputs_type": draft.get("inputs") or {},
-                    "runner_group": runner,
-                    "connections": draft.get("connections") or {},
-                },
-                "draft_playbook": yaml_text,
-                "test_session_id": test_session_id,
-                "command_params": {},
-            },
-        },
+        "test_session_id": str(uuid.uuid4()),
+        "runner": draft.get("runner") or "",
     }
 
 
-def _parse_messages(response):
-    """Yield each parsed JSON message from the separator-delimited stream."""
-    buffer = b""
-    for chunk in response.iter_bytes():
-        buffer += chunk
-        while (index := buffer.find(MESSAGE_SEPARATOR)) >= 0:
-            raw, buffer = buffer[:index], buffer[index + len(MESSAGE_SEPARATOR):]
-            if raw.strip():
-                yield json.loads(raw)
+def _execution_state(execution):
+    """The run's effective state.
 
-
-def _iter_messages(response):
-    """Read the handshake, return (execution_id, remaining_messages_iter).
-
-    The first message carries the execution_id; subsequent messages flow through the iterator.
+    The controller sets `state_ui` only in the engines that distinguish it from `state`
+    (a finished run can sit at state=Running / state_ui=Completed), and every consumer
+    falls back to `state` when it's empty — so this is the value to branch on.
     """
-    messages = _parse_messages(response)
-    first = next(messages, None)
-    if first is None:
-        raise RuntimeError("stream closed before sending any message.")
-    execution_id = (first.get("data") or {}).get("id")
-    if not execution_id:
-        raise RuntimeError(f"stream did not return an execution id; first message: {first!r}")
-    return execution_id, messages
+    return execution.get("state_ui") or execution.get("state") or ""
 
 
 def _start_test_run(api, base_url, playbook_id, draft, yaml_text):
-    """Open the streaming test run, block until EndExecution. Returns (execution_id, info_lines)."""
+    """Start the test run and block until it reaches a terminal state.
+
+    The controller used to expose an SSE-style POST /playbooks/{id}/start/stream that
+    pushed run events until `EndExecution`; it was removed along with the whole streaming
+    server (commit 9fd2139ba08, "delete-workflow-response-stream"), so we start the run
+    over the plain endpoint and poll the execution instead.
+
+    Returns (execution_id, info_lines).
+    """
     body = _build_run_workflow_body(draft, playbook_id, yaml_text)
-    lines = []
-    try:
-        with api.stream(
-            "POST",
-            f"/playbooks/{playbook_id}/start/stream",
-            json=body,
-            timeout=httpx.Timeout(connect=30, read=MAX_WAIT_SECONDS, write=30, pool=30),
-        ) as response:
-            raise_for_status(response)
-            execution_id, messages = _iter_messages(response)
+    execution = raise_for_status(api.post(f"/playbooks/{playbook_id}/start", json=body)).json()
+    execution_id = execution.get("id")
+    if not execution_id:
+        raise RuntimeError(f"start did not return an execution id; response: {execution!r}")
 
-            lines.append("ok: test run started")
-            lines.append(f"execution_id: {execution_id}")
-            lines.append(f"api: {base_url}/executions/{execution_id}")
+    lines = [
+        "ok: test run started",
+        f"execution_id: {execution_id}",
+        f"api: {base_url}/executions/{execution_id}",
+    ]
 
-            for message in messages:
-                data = message.get("data") or {}
-                if data.get("cmd_type") == END_EXECUTION_COMMAND and data.get("execution_id") == execution_id:
-                    return execution_id, lines
-            return execution_id, lines  # stream closed without EndExecution
-    except httpx.ReadTimeout:
-        raise RuntimeError(f"no progress on stream for {MAX_WAIT_SECONDS}s; aborting.")
+    deadline = time.monotonic() + MAX_WAIT_SECONDS
+    while _execution_state(execution) not in TERMINAL_EXECUTION_STATES:
+        if time.monotonic() >= deadline:
+            raise RuntimeError(
+                f"run still {_execution_state(execution) or '<no state>'} after {MAX_WAIT_SECONDS}s; "
+                f"aborting the wait. The run itself may still be going — check it with "
+                f"get_run_log('{playbook_id}', '{execution_id}')."
+            )
+        time.sleep(POLL_INTERVAL_SECONDS)
+        execution = raise_for_status(api.get(f"/executions/{execution_id}")).json()
+
+    if _execution_state(execution) == PAUSED_EXECUTION_STATE:
+        lines.append(
+            "note: the run is Paused — it's waiting on something (usually a human response). "
+            "Its steps so far are below; resume or inspect it in the editor."
+        )
+    return execution_id, lines
 
 
 def trigger_test_run(playbook_id, acknowledge_risks=False):
-    """Trigger a draft test run via the controller's streaming endpoint and block until it finishes.
+    """Trigger a draft test run and block until it finishes.
 
-    Mirrors the UI's Test Run: opens an SSE-style POST to /playbooks/{id}/start/stream,
-    which dispatches the RunWorkflow command. We read the streaming response until we see
-    an `EndExecution` message (the same signal the UI uses to know the run finished), then
-    fetch /executions/{id} once for the final state summary.
+    Mirrors the UI's Test Run: POSTs the draft to /playbooks/{id}/start with is_draft=True,
+    then polls /executions/{id} until the run reaches a terminal state, and reports the
+    final state summary.
 
     Before opening the run, three gates (a test run is NOT a dry run — it executes real
     actions against real systems, see reference/safety.md):
@@ -1341,13 +1332,13 @@ def trigger_test_run(playbook_id, acknowledge_risks=False):
     execution_id, lines = _start_test_run(api, base_url, playbook_id, draft, yaml_text)
     lines = safety_lines + lines
 
-    # Stream closed → run is done. One final fetch for the summary.
+    # Run reached a terminal state → one final fetch for the summary.
     execution = raise_for_status(api.get(f"/executions/{execution_id}")).json()
-    state_ui = execution.get("state_ui") or ""
-    lines.append(f"state_ui: {state_ui or '<none>'}")
+    state = _execution_state(execution)
+    lines.append(f"state: {state or '<none>'}")
     if execution.get("step_results"):
         lines.append(f"step_results: {execution['step_results']}")
-    if state_ui == "Completed":
+    if state == "Completed":
         # Unlocks publish_automation's [BLOCKED UNTESTED] gate for this exact draft.
         record_test_evidence(playbook_id, yaml_text, execution_id)
     return "\n".join(lines)
@@ -1402,7 +1393,7 @@ def get_run_log(playbook_id, execution_id=None):
             return f"no executions found for playbook {playbook_id}. Ask the user to trigger a test run."
 
     execution = raise_for_status(api.get(f"/executions/{execution_id}")).json()
-    if execution.get("state_ui") == "Completed":
+    if _execution_state(execution) == "Completed":
         _record_evidence_for_completed_run(api, playbook_id, execution_id)
     lines = [
         f"Playbook: {execution.get('name')} (id={execution.get('playbook_id')})",
