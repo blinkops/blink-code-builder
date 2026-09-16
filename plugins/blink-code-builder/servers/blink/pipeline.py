@@ -1245,27 +1245,9 @@ def _wait_for_execution(api, execution_id, max_wait=MAX_WAIT_SECONDS):
 
 
 def trigger_test_run(playbook_id, acknowledge_risks=False):
-    """Trigger a draft test run and wait (briefly) for it to finish.
-
-    Starts the controller's latest draft version via POST /playbooks/{id}/draft/execute,
-    which returns immediately with an execution_id, then polls GET /executions/{id} every
-    few seconds for up to MAX_WAIT_SECONDS. A run that's still going after that isn't a
-    failure — it's reported as still running so the caller can check back later with
-    get_run_log instead of blocking on it.
-
-    Before starting the run, three gates (a test run is NOT a dry run — it executes real
-    actions against real systems, see reference/safety.md):
-      1. Connections allowlist (`workspace/workflows/connections-allowlist.yaml`, a YAML list of
-         connection names). Any step-level connection not on the list → `[BLOCKED
-         CONNECTIONS]` block so the SKILL flow can offer to extend the allowlist.
-      2. Human-wait scan. A step that waits for a human (internal.Sleep with
-         `Mode: Web Form Response`, or `wait_for_response: true`) can't be exercised by an
-         automatic test run — → `[BLOCKED HUMAN_WAIT]` block. No override flag: the
-         resolution is a manual run from the editor, then get_run_log.
-      3. Blast-radius scan. Steps matching high-impact patterns (destructive action names,
-         messaging inside a loop, broadcast mentions like @channel) → `[BLOCKED SAFETY]`
-         block. Re-call with acknowledge_risks=True only after an explicit user yes.
-    """
+    """Run the draft's latest version as a real test run and briefly wait for a result,
+    after checking it against the connections allowlist, human-wait steps, and blast-radius
+    safety patterns (see reference/safety.md)."""
     api = build_client()
     base_url = workspace_base_url()
 
