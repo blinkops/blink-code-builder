@@ -6,13 +6,70 @@ The **generating-workflow** skill owns the end-to-end flow: clarify → look up 
 
 ## Catalog
 
-Per-user cache, populated by a `SessionStart` hook that runs `hooks/refresh_catalog.py`. Location: `${CLAUDE_PLUGIN_DATA}/catalog/` (Claude Code injects `CLAUDE_PLUGIN_DATA` per plugin).
+Blink-wide reference data, not tied to any one workspace: the full set of vendor actions
+(e.g. `slack.send_message`, `aws.ec2_list_instances`) you can use as workflow steps, along
+with their input/output schemas. It's a per-user cache, populated by a `SessionStart` hook
+that runs `hooks/refresh_catalog.py`. Location: `${CLAUDE_PLUGIN_DATA}/catalog/` (Claude Code
+injects `CLAUDE_PLUGIN_DATA` per plugin).
 
 To force a refresh: delete the catalog dir and start a new Claude Code session.
 
-Layout (see [skills/generating-workflow/reference/looking-up-actions.md](skills/generating-workflow/reference/looking-up-actions.md)):
+For the layout and how to grep it, see [skills/generating-workflow/reference/looking-up-actions.md](skills/generating-workflow/reference/looking-up-actions.md).
 
 If the catalog is missing when you need it, **stop and route the user through the `setup-blink-plugin` skill** — the hook couldn't populate it (usually means `userConfig` isn't set). Don't try to recover from inside another skill.
+
+## Workspace data lives in this repo, not the catalog
+
+Workflows, agents, connections, and tables belong to a specific workspace, so they are kept as
+files in this repo — never in the per-user catalog cache above. Grep these files directly, and
+regenerate them on demand with the tool named for each. Never source workspace data from the
+catalog.
+
+### Workflows
+
+`workspace/workflows/workflows-list.tsv` lists every workflow (automation/playbook) in the workspace, drafts
+included — id, name, `automation_type`, state (`draft`/`published`/`modified`), and `active`.
+It's a repo file, rewritten by the `SessionStart` hook and kept in sync
+automatically after `save_automation` and `publish_automation`. Grep it first; re-run
+`list_workflows` if it looks stale (a workflow was just published elsewhere mid-session).
+
+A workflow is callable as a **subflow** (as a step, or as an agent's ability) only when its row
+shows `automation_type: on_demand`, `active: true`, and state `published` or `modified` — the
+draft alone is never callable. See the `subflows` skill for the full lifecycle, and the
+`generating-workflow` skill for authoring one.
+
+Each workflow that's been fetched also has its own YAML file, written by `fetch_automation` to
+`workspace/workflows/<name>.yaml` and saved back with `save_automation`.
+
+### Agents
+
+`workspace/agents/agents-list.tsv` lists every agent in the workspace, drafts included — id,
+name, and state (`draft`/`published`/`modified`). A step calls an agent as `agents.<id>`.
+It's a repo file, rewritten by the `SessionStart` hook and kept in sync automatically after
+`save_agent` and `publish_agent`. Grep it first; re-run `list_agents` if it looks stale. An agent is callable as a workflow step only
+once its row is `published` or `modified` — a draft is never callable. See the
+`generating-agent` skill.
+
+The call goes both ways: an agent gets a workflow as an **ability**, so a workflow can call an
+agent as a step and an agent can call a workflow as one of its abilities.
+
+Each agent that's been fetched also has its own YAML file under `workspace/agents/` — a full export of
+that agent's config, written by `fetch_agent` (or authored by hand) and saved with `save_agent`.
+
+### Connections
+
+`workspace/connections/connections.tsv` lists every connection bound in the workspace (name, type).
+It's written by the same `SessionStart` hook (`hooks/refresh_workspace.py`) that refreshes the
+workflow and agent lists, and refreshed again after every `publish_automation` call.
+
+### Tables
+
+`workspace/tables/tables-schema.yaml` is a single YAML file listing every table in the workspace together
+with its schema (columns, types, etc.) — it does **not** contain the tables' data (records).
+Regenerated on demand from `get_tables_schema` (it costs one call per table, so the
+`SessionStart` hook leaves it alone), and after `create_table`/`edit_table`/`delete_table`. See the **managing-tables** skill to create or
+edit a table's structure directly in Blink, and the **tables** skill to connect a table to a
+workflow (read/write rows from inside a workflow step).
 
 ## Search scope
 

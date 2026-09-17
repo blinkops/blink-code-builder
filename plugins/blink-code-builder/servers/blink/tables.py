@@ -9,8 +9,9 @@ from typing import Any
 import yaml
 
 from blink_shared.client import build_client, raise_for_status
+from blink_shared.config import workspace_root
 
-DEFAULT_OUTPUT = Path("tables") / "tables-schema.yaml"
+DEFAULT_OUTPUT = workspace_root() / "tables" / "tables-schema.yaml"
 
 # Mirrors backend's field attribute names
 _ATTR_REQUIRED = "required"
@@ -175,7 +176,7 @@ def create_table(
     with_default_records: bool = False,
 ) -> str:
     """Create a table with the given columns. Live in the workspace immediately —
-    there is no draft to save first. Syncs `tables/tables-schema.yaml` on success.
+    there is no draft to save first. Syncs `workspace/tables/tables-schema.yaml` on success.
     """
     specs = [FieldSpec(**field) for field in fields]
 

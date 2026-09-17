@@ -5,7 +5,7 @@ import difflib
 import json
 import os
 import re
-import uuid
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -15,32 +15,24 @@ import yaml
 from ._blink import resolve_playbook_ref, update_draft, update_id_cache, cached_playbook_id, \
     list_packs, find_playbook_across_packs, record_test_evidence, load_test_evidence, \
     yaml_digest, iter_steps, flatten_steps
-from ._catalog import read_workspace_actions, catalog_action_names
+from ._workspace import (workspace_action_names, WORKFLOWS_LIST_PATH,
+                         WORKFLOW_PREFIX, AGENT_PREFIX)
 from ._safety import scan_blast_radius
 from blink_shared.client import build_client, raise_for_status
-from blink_shared.config import catalog_root, editor_url, workspace_base_url
+from blink_shared.config import catalog_root, editor_url, workspace_base_url, workspace_root
 
 
 TRUNCATE_LIMIT = 600
 
 DEFAULT_PACK = "blink-code-builder"
 
-# Delimiter the run-streaming endpoint puts between messages.
-MESSAGE_SEPARATOR = b"%%%%_____________%%%%BLINK_MESSAGE%%%%_____________%%%%"
-END_EXECUTION_COMMAND = "EndExecution"
-MAX_WAIT_SECONDS = 600
-ALLOWLIST_PATH = Path("automations/connections-allowlist.yaml")
+POLL_INTERVAL_SECONDS = 2
+MAX_WAIT_SECONDS = 90
+# States that mean the run is over, one way or another.
+TERMINAL_STATES = {"Completed", "Failed", "Cancelled", "Timeout", "Skipped", "Paused"}
+ALLOWLIST_PATH = workspace_root() / "workflows" / "connections-allowlist.yaml"
 
 AUTOMATION_TYPES = {"on_demand", "scheduled", "event"}
-# A step whose action is `automations.<playbook-uuid>` calls another workflow (a subflow).
-SUBFLOW_ACTION_PREFIX = "automations."
-# A published agent gets its own action, `agents.<agent-id>`. Like a subflow it is created at
-# publish time and exists only in the workspace, so it is never in the vendor catalog — and
-# workspace_actions.tsv carries no parameter list, so the generic parameter checks can't run on
-# an agent step. These two constants encode what the catalog can't tell us: the inputs below are
-# the built-in run-agent action's, which every published agent's action is cloned from (minus its
-# `agent_id` parameter, which the clone pins).
-AGENT_ACTION_PREFIX = "agents."
 AGENT_STEP_REQUIRED_INPUTS = ("task",)
 AGENT_STEP_KNOWN_INPUTS = (
     "task", "output_schema", "roles_and_constraints", "timeout",
@@ -552,12 +544,11 @@ def _validate_triggers(automation, triggers_catalog):
 
 
 def _validate_agent_step_inputs(step):
-    """Check an `agents.<uuid>` step's inputs against the RunAgent contract.
+    """Check the inputs of a step that calls an agent, during `validate_automation`.
 
-    Needed because workspace_actions.tsv has no parameter list, so `_check_step_readiness`
-    can't see that `task` is required — a step missing it would otherwise be reported READY
-    and then fail at run time. Unknown names are only a warning: if the action ever gains a
-    parameter, a stale list here must not block a valid workflow.
+    An agent step's parameters aren't described anywhere the validator can read, so this
+    hardcodes them: a missing `task` is an error (the run would fail), anything unknown is
+    only a warning (the agent action may have gained a parameter this list doesn't know).
     """
     errors, warnings = [], []
     step_inputs = step.get("inputs") or {}
@@ -586,26 +577,27 @@ def _validate_workspace_action_call(step, action_name, workspace_actions):
     """`automations.<uuid>` (subflow) and `agents.<uuid>` (agent) steps call something the
     workspace owns. Neither is ever reliable to check against the vendor actions catalog —
     both actions are created at publish time and the vendor catalog can lag up to 7 days —
-    so check workspace_actions.tsv instead, which the SessionStart hook refreshes every
-    session and again after every publish. Presence there *is* callability: the controller
-    exposes these actions only while the target is published and active."""
+    so check workflows-list.tsv / agents-list.tsv instead, which are kept in sync after every
+    save and publish. Presence there *is* callability: the controller exposes these actions
+    only while the target is published and active."""
     if workspace_actions is None:
         return []  # workspace snapshot unavailable: can't verify, don't false-flag
     if action_name in workspace_actions:
         return []
-    if action_name.startswith(AGENT_ACTION_PREFIX):
+    if action_name.startswith(AGENT_PREFIX):
         return [
             f"[ERROR] step {step.get('id')}: agent {action_name!r} is not callable in this "
             "workspace. Either the id is wrong, or the agent has never been published — an "
-            "agent becomes callable only when published. Copy the `action` column of a "
-            "kind=agent row in workspace_actions.tsv, or publish the agent first "
-            "(see the generating-agent skill)."
+            "agent becomes callable only when published. Take the `id` column of a "
+            "published/modified row in agents-list.tsv and write `agents.<id>`, or publish "
+            "the agent first (see the generating-agent skill)."
         ]
     return [
         f"[ERROR] step {step.get('id')}: action {action_name!r} is not callable in this workspace. "
         "Either the id is wrong, or the target workflow isn't published and active — only a "
-        "published, active on_demand workflow is callable as a subflow. Copy the `action` column "
-        "of a kind=subflow row in workspace_actions.tsv, or publish the target workflow first."
+        "published, active on_demand workflow is callable as a subflow. Take the `id` column "
+        "of a callable row in workflows-list.tsv and write `automations.<id>`, or publish the "
+        "target workflow first."
     ]
 
 
@@ -680,9 +672,9 @@ def _validate(automation, actions_catalog, triggers_catalog, workspace_actions, 
         # Action exists + required parameters + enum options.
         if action_name in BRANCH_ACTIONS:
             continue  # engine-handled, structurally validated above
-        if action_name.startswith((SUBFLOW_ACTION_PREFIX, AGENT_ACTION_PREFIX)):
+        if action_name.startswith((WORKFLOW_PREFIX, AGENT_PREFIX)):
             errors.extend(_validate_workspace_action_call(step, action_name, workspace_actions))
-            if action_name.startswith(AGENT_ACTION_PREFIX):
+            if action_name.startswith(AGENT_PREFIX):
                 agent_errors, agent_warnings = _validate_agent_step_inputs(step)
                 errors.extend(agent_errors)
                 warnings.extend(agent_warnings)
@@ -937,7 +929,7 @@ def validate_automation(path, allow_missing_catalog=False):
         actions_catalog = {}
 
     triggers_catalog = _load_triggers_catalog()
-    workspace_actions = catalog_action_names(read_workspace_actions())
+    workspace_actions = workspace_action_names()
 
     errors, warnings = _validate(automation, actions_catalog, triggers_catalog, workspace_actions, catalog_available)
     errors = duplicate_key_errors + errors
@@ -945,7 +937,7 @@ def validate_automation(path, allow_missing_catalog=False):
     # A subflow must never call itself directly. We only know this automation's own id if a
     # previous save cached it — indirect (multi-hop) cycles are the engine's job to catch.
     own_playbook_id = cached_playbook_id(automation.get("name") or "")
-    if own_playbook_id and f"{SUBFLOW_ACTION_PREFIX}{own_playbook_id}" in automation_actions_names:
+    if own_playbook_id and f"{WORKFLOW_PREFIX}{own_playbook_id}" in automation_actions_names:
         errors.append(
             f"[ERROR] a step calls this automation's own playbook id ({own_playbook_id}) — "
             "a subflow must never call itself."
@@ -989,7 +981,58 @@ def _create_playbook(api, pack_id, name, yaml_text):
     return str(raise_for_status(resp).json()["id"])
 
 
+def _workflow_state(automation):
+    """Where a workflow stands between its draft and its published version.
+    One of `draft`, `published`, `modified` — same semantics as an agent's state."""
+    if not automation.get("is_published"):
+        return "draft"
+    return "modified" if automation.get("has_unpublished_changes") else "published"
+
+
+def list_workflows(output=""):
+    """List every workflow in the workspace, drafts included, and write it to a TSV file in
+    the repo (default: workspace/workflows/workflows-list.tsv).
+
+    This is the only local way to see a draft or inactive workflow — a row that isn't
+    `on_demand`/`active`/`published`-or-`modified` isn't callable as a subflow yet.
+
+    Called by Claude through the `list_workflows` tool, and automatically after every
+    `save_automation` and `publish_automation` so the file keeps up with the workspace.
+    """
+    with build_client() as api:
+        packs = list_packs(api)
+
+    lines = [
+        "# state: draft = never published | published = live, draft matches it | "
+        "modified = live, but the draft has newer edits that are not published yet",
+        "# id\tname\tautomation_type\tstate\tactive",
+    ]
+    total = 0
+    for pack in packs:
+        for automation in pack.get("automations") or []:
+            total += 1
+            lines.append(
+                f"{automation.get('id')}\t{automation.get('name') or ''}\t"
+                f"{automation.get('automation_type') or 'on_demand'}\t{_workflow_state(automation)}\t"
+                f"{'true' if automation.get('active') else 'false'}"
+            )
+
+    out_path = Path(output) if output else WORKFLOWS_LIST_PATH
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text("\n".join(lines) + "\n")
+
+    return f"ok: wrote {out_path} ({total} workflows)"
+
+
+def _sync_workflows_list():
+    try:
+        list_workflows()
+    except Exception:
+        pass  # best effort; rerun list_workflows if the local file falls out of sync
+
+
 def _report(base_url, playbook_id, suffix=""):
+    _sync_workflows_list()
     return (
         f"ok: saved playbook {playbook_id}{suffix}"
         f"\napi: {base_url}/playbooks/{playbook_id}"
@@ -1173,110 +1216,38 @@ def _enforce_blast_radius_gate(yaml_text, acknowledged, publishing=False):
     return "\n".join(lines), []
 
 
-def _build_run_workflow_body(draft, playbook_id, yaml_text):
-    """Build the request body for POST /playbooks/{id}/start/stream."""
-    runner = draft.get("runner") or ""
-    test_session_id = str(uuid.uuid4())
-
-    return {
-        "id": playbook_id,
-        "playbook": yaml_text,
-        "input_values": {},
-        "is_draft": True,
-        "test_session_id": test_session_id,
-        "runner": runner,
-        "command": {
-            "cmd_id": str(uuid.uuid4()),
-            "cmd_type": "RunWorkflow",
-            "params": {
-                "playbook_id": playbook_id,
-                "_Context": {
-                    "inputs_type": draft.get("inputs") or {},
-                    "runner_group": runner,
-                    "connections": draft.get("connections") or {},
-                },
-                "draft_playbook": yaml_text,
-                "test_session_id": test_session_id,
-                "command_params": {},
-            },
-        },
-    }
-
-
-def _parse_messages(response):
-    """Yield each parsed JSON message from the separator-delimited stream."""
-    buffer = b""
-    for chunk in response.iter_bytes():
-        buffer += chunk
-        while (index := buffer.find(MESSAGE_SEPARATOR)) >= 0:
-            raw, buffer = buffer[:index], buffer[index + len(MESSAGE_SEPARATOR):]
-            if raw.strip():
-                yield json.loads(raw)
-
-
-def _iter_messages(response):
-    """Read the handshake, return (execution_id, remaining_messages_iter).
-
-    The first message carries the execution_id; subsequent messages flow through the iterator.
-    """
-    messages = _parse_messages(response)
-    first = next(messages, None)
-    if first is None:
-        raise RuntimeError("stream closed before sending any message.")
-    execution_id = (first.get("data") or {}).get("id")
+def _start_test_run(api, base_url, playbook_id):
+    """Kick off a draft execution. Always async — returns (execution_id, info_lines)."""
+    response = raise_for_status(api.post(
+        f"/playbooks/{playbook_id}/draft/execute",
+        headers={"BLINK-INTERNAL-SERVICE-REQUEST": "true"},
+    ))
+    execution_id = response.json().get("execution_id")
     if not execution_id:
-        raise RuntimeError(f"stream did not return an execution id; first message: {first!r}")
-    return execution_id, messages
+        raise RuntimeError(f"draft/execute did not return an execution_id; response: {response.json()!r}")
+    return execution_id, [
+        "ok: test run started",
+        f"execution_id: {execution_id}",
+        f"api: {base_url}/executions/{execution_id}",
+    ]
 
 
-def _start_test_run(api, base_url, playbook_id, draft, yaml_text):
-    """Open the streaming test run, block until EndExecution. Returns (execution_id, info_lines)."""
-    body = _build_run_workflow_body(draft, playbook_id, yaml_text)
-    lines = []
-    try:
-        with api.stream(
-            "POST",
-            f"/playbooks/{playbook_id}/start/stream",
-            json=body,
-            timeout=httpx.Timeout(connect=30, read=MAX_WAIT_SECONDS, write=30, pool=30),
-        ) as response:
-            raise_for_status(response)
-            execution_id, messages = _iter_messages(response)
-
-            lines.append("ok: test run started")
-            lines.append(f"execution_id: {execution_id}")
-            lines.append(f"api: {base_url}/executions/{execution_id}")
-
-            for message in messages:
-                data = message.get("data") or {}
-                if data.get("cmd_type") == END_EXECUTION_COMMAND and data.get("execution_id") == execution_id:
-                    return execution_id, lines
-            return execution_id, lines  # stream closed without EndExecution
-    except httpx.ReadTimeout:
-        raise RuntimeError(f"no progress on stream for {MAX_WAIT_SECONDS}s; aborting.")
+def _wait_for_execution(api, execution_id, max_wait=MAX_WAIT_SECONDS):
+    """Poll GET /executions/{id} until it reaches a terminal state, or max_wait runs out."""
+    deadline = time.monotonic() + max_wait
+    while True:
+        execution = raise_for_status(api.get(f"/executions/{execution_id}")).json()
+        if (execution.get("state_ui") or execution.get("state")) in TERMINAL_STATES:
+            return execution
+        if time.monotonic() >= deadline:
+            return execution
+        time.sleep(POLL_INTERVAL_SECONDS)
 
 
 def trigger_test_run(playbook_id, acknowledge_risks=False):
-    """Trigger a draft test run via the controller's streaming endpoint and block until it finishes.
-
-    Mirrors the UI's Test Run: opens an SSE-style POST to /playbooks/{id}/start/stream,
-    which dispatches the RunWorkflow command. We read the streaming response until we see
-    an `EndExecution` message (the same signal the UI uses to know the run finished), then
-    fetch /executions/{id} once for the final state summary.
-
-    Before opening the run, three gates (a test run is NOT a dry run — it executes real
-    actions against real systems, see reference/safety.md):
-      1. Connections allowlist (`automations/connections-allowlist.yaml`, a YAML list of
-         connection names). Any step-level connection not on the list → `[BLOCKED
-         CONNECTIONS]` block so the SKILL flow can offer to extend the allowlist.
-      2. Human-wait scan. A step that waits for a human (internal.Sleep with
-         `Mode: Web Form Response`, or `wait_for_response: true`) can't be exercised by an
-         automatic test run — → `[BLOCKED HUMAN_WAIT]` block. No override flag: the
-         resolution is a manual run from the editor, then get_run_log.
-      3. Blast-radius scan. Steps matching high-impact patterns (destructive action names,
-         messaging inside a loop, broadcast mentions like @channel) → `[BLOCKED SAFETY]`
-         block. Re-call with acknowledge_risks=True only after an explicit user yes.
-    """
+    """Run the draft's latest version as a real test run and briefly wait for a result,
+    after checking it against the connections allowlist, human-wait steps, and blast-radius
+    safety patterns (see reference/safety.md)."""
     api = build_client()
     base_url = workspace_base_url()
 
@@ -1295,12 +1266,15 @@ def trigger_test_run(playbook_id, acknowledge_risks=False):
     if blocked:
         return blocked
 
-    execution_id, lines = _start_test_run(api, base_url, playbook_id, draft, yaml_text)
+    execution_id, lines = _start_test_run(api, base_url, playbook_id)
     lines = safety_lines + lines
 
-    # Stream closed → run is done. One final fetch for the summary.
-    execution = raise_for_status(api.get(f"/executions/{execution_id}")).json()
+    execution = _wait_for_execution(api, execution_id)
     state_ui = execution.get("state_ui") or ""
+    if state_ui not in TERMINAL_STATES:
+        lines.append(f"still running after {MAX_WAIT_SECONDS}s — check back with get_run_log({playbook_id!r}, {execution_id!r})")
+        return "\n".join(lines)
+
     lines.append(f"state_ui: {state_ui or '<none>'}")
     if execution.get("step_results"):
         lines.append(f"step_results: {execution['step_results']}")
@@ -1514,6 +1488,8 @@ def publish_automation(playbook_id, acknowledge_risks=False, allow_untested=Fals
         raise RuntimeError(f"HTTP {error.response.status_code}: {error.response.text[:400]}") from error
     if not published:
         raise RuntimeError(f"playbook {playbook_id!r} not found (404) — check the id.")
+
+    _sync_workflows_list()
 
     lines.append(f"ok: published playbook {playbook_id}")
     lines.append(f"api: {base_url}/playbooks/{playbook_id}")
