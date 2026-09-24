@@ -7,7 +7,7 @@ When the catalog entry for an action isn't enough to author it confidently — r
 Try them in roughly this order. Stop as soon as one gives you enough certainty.
 
 1. **Look at sibling actions in the same service.** Catalog entries for `slack.*`, `aws.ec2_*`, etc. tend to share parameter shapes. If `slack.send_message` has full metadata and `slack.send_message_interactive` doesn't, the missing fields are usually a near-superset.
-2. **Search the user's `automations/` directory and any committed YAML for prior usage.** A working example in the repo beats any inferred shape. `grep -rn 'action: <full_name>' automations/` is cheap.
+2. **Search the user's `workspace/workflows/` directory and any committed YAML for prior usage.** A working example in the repo beats any inferred shape. `grep -rn 'action: <full_name>' workflows/` is cheap.
 3. **Check the case studies below.** Frequently-tripped-over actions are recorded here — exact shapes learned from real runs.
 4. **Run a tiny test in scratch.** Draft a minimal automation in `/tmp/`, save it, trigger a test run with `trigger_test_run`, and read the error. This is fast (one round-trip) and the controller's validation messages are usually specific enough to reverse-engineer the shape.
 5. **Ask the user** — last resort, but always preferable to fabricating values for a required field. Frame the question concretely ("the catalog says `Variables` is required but doesn't describe its shape; do you have an example, or can you point me to a working playbook that uses it?") rather than asking the user to fill in a blank.
@@ -62,7 +62,7 @@ Rules:
 
 - `record` is a list, not a map. Each item is `{key: <column name>, value: <cell value>}`.
 - `table` takes the table's name — case-management tables and regular workspace tables use this same action shape.
-- Column names aren't in the catalog. Confirm them with the user, or by grepping `automations/` for a prior use of the same table, before writing `key:`.
+- Column names aren't in the catalog. Confirm them with the user, or by grepping `workspace/workflows/` for a prior use of the same table, before writing `key:`.
 
 ## `internal.new_interactive_web_form` — `wait_for_response: true` doesn't wait in a Test Run
 

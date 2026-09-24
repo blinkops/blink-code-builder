@@ -27,7 +27,7 @@ def _list_connections() -> str:
 
 @mcp.tool(name="fetch_automation")
 def _fetch_automation(ref: str, stdout: bool = False, output: str = "") -> str:
-    """Pull an existing Blink playbook (by id or editor URL) into automations/ as YAML."""
+    """Pull an existing Blink playbook (by id or editor URL) into workspace/workflows/ as YAML."""
     return discovery.fetch_automation(ref, stdout=stdout, output=output)
 
 
@@ -56,7 +56,7 @@ def _save_automation(path: str, playbook_id: str = "") -> str:
 
 @mcp.tool(name="trigger_test_run")
 def _trigger_test_run(playbook_id: str, acknowledge_risks: bool = False) -> str:
-    """Trigger a draft test run via the controller's streaming endpoint and block until it finishes.
+    """Trigger a draft test run via the controller's endpoint."
 
     Gated: connections allowlist, human-wait steps, and blast-radius scan. Pass
     acknowledge_risks=True only after the user explicitly approved the steps a
@@ -84,9 +84,20 @@ def _publish_automation(playbook_id: str, acknowledge_risks: bool = False, allow
     )
 
 
+@mcp.tool(name="list_workflows")
+def _list_workflows(output: str = "") -> str:
+    """Write every workflow in the workspace, drafts included, to a TSV file (default:
+    workspace/workflows/workflows-list.tsv).
+
+    Use this to find a draft/inactive workflow (a row not on_demand/active/published-or-
+    modified isn't callable as a subflow yet) or to answer "which workflows exist?" when you
+    don't know the exact name. Also auto-synced after save_automation and publish_automation."""
+    return pipeline.list_workflows(output=output)
+
+
 @mcp.tool(name="get_tables_schema")
 def _get_tables_schema(output: str = "") -> str:
-    """Write every table in the workspace, with column-level schema, to a YAML file (default: tables/tables-schema.yaml)."""
+    """Write every table in the workspace, with column-level schema, to a YAML file (default: workspace/tables/tables-schema.yaml)."""
     return tables.get_tables_schema(output=output)
 
 
@@ -151,17 +162,19 @@ def _delete_table(table: str, acknowledge_risks: bool = False) -> str:
 
 
 @mcp.tool(name="list_agents")
-def _list_agents() -> str:
-    """List every agent in the workspace as `<id>\\t<name>\\t<state>`, drafts included.
+def _list_agents(output: str = "") -> str:
+    """Write every agent in the workspace, drafts included, to a TSV file (default:
+    workspace/agents/agents-list.tsv).
 
-    The local catalog lists only published agents, so use this to find a draft agent or to
-    answer "which agents exist?" when you don't know the exact name."""
-    return agents.list_agents()
+    Use this to find a draft agent (only published/modified is callable as `agents.<id>`) or
+    to answer "which agents exist?" when you don't know the exact name. Also auto-synced after
+    save_agent and publish_agent."""
+    return agents.list_agents(output=output)
 
 
 @mcp.tool(name="fetch_agent")
 def _fetch_agent(ref: str, stdout: bool = False, output: str = "") -> str:
-    """Pull an existing Blink agent (by id or agent-builder URL) into agents/ as YAML."""
+    """Pull an existing Blink agent (by id or agent-builder URL) into workspace/agents/ as YAML."""
     return agents.fetch_agent(ref, stdout=stdout, output=output)
 
 
