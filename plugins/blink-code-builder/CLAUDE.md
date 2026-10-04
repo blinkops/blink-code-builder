@@ -20,7 +20,7 @@ If the catalog is missing when you need it, **stop and route the user through th
 
 ## Workspace data lives in this repo, not the catalog
 
-Workflows, agents, connections, and tables belong to a specific workspace, so they are kept as
+Workflows, agents, connections, tables, and dashboards belong to a specific workspace, so they are kept as
 files in this repo — never in the per-user catalog cache above. Grep these files directly, and
 regenerate them on demand with the tool named for each. Never source workspace data from the
 catalog.
@@ -70,6 +70,19 @@ Regenerated on demand from `get_tables_schema` (it costs one call per table, so 
 `SessionStart` hook leaves it alone), and after `create_table`/`edit_table`/`delete_table`. See the **managing-tables** skill to create or
 edit a table's structure directly in Blink, and the **tables** skill to connect a table to a
 workflow (read/write rows from inside a workflow step).
+
+### Dashboards
+
+`workspace/dashboards/dashboards-list.yaml` lists every dashboard in the workspace with a short
+summary of its widgets (id, kind, name, table_name) and whether it's published to the Portal.
+Like the tables schema, it costs one call per dashboard, so the `SessionStart` hook leaves it
+alone: it's written on demand by `list_dashboards`, and after `save_dashboard`/`publish_dashboard`.
+
+Each dashboard that's been fetched or saved has its own YAML file at
+`workspace/dashboards/<name>.yaml`, written by `fetch_dashboard` and saved with
+`save_dashboard`. A dashboard has no draft: a save is live at once. The plugin never deletes a
+dashboard or a widget. `publish_dashboard` always makes Claude Code ask the user first (a
+`PreToolUse` hook). See the **managing-dashboards** skill.
 
 ## Search scope
 
