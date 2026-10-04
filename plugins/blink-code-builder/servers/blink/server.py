@@ -14,7 +14,7 @@ ensure_installed()
 
 from mcp.server.fastmcp import FastMCP
 
-from . import discovery, pipeline, agents, tables
+from . import discovery, pipeline, agents, tables, dashboards
 
 mcp = FastMCP("blink")
 
@@ -211,6 +211,53 @@ def _publish_agent(ref: str = "", path: str = "", acknowledge_risks: bool = Fals
     (see save_agent)."""
     return agents.publish_agent(ref=ref, path=path, acknowledge_risks=acknowledge_risks,
                                 allow_overwrite=allow_overwrite)
+
+
+@mcp.tool(name="list_dashboards")
+def _list_dashboards(output: str = "") -> str:
+    """Write every dashboard in the workspace, with a summary of its widgets, to a YAML file
+    (default: workspace/dashboards/dashboards-list.yaml).
+
+    One call per dashboard, so it runs on demand, not at session start. Also auto-synced after
+    save_dashboard and publish_dashboard."""
+    return dashboards.list_dashboards(output=output)
+
+
+@mcp.tool(name="fetch_dashboard")
+def _fetch_dashboard(ref: str, stdout: bool = False, output: str = "") -> str:
+    """Pull an existing Blink dashboard (by id or editor URL) into workspace/dashboards/ as YAML."""
+    return dashboards.fetch_dashboard(ref, stdout=stdout, output=output)
+
+
+@mcp.tool(name="validate_dashboard")
+def _validate_dashboard(path: str) -> str:
+    """Validate a Blink dashboard YAML locally: widget types and settings, the 12-column grid,
+    and table/column names against workspace/tables/tables-schema.yaml.
+
+    `[ERROR]` lines block save_dashboard. `[WARN]` lines never block."""
+    return dashboards.validate_dashboard(path)
+
+
+@mcp.tool(name="save_dashboard")
+def _save_dashboard(path: str) -> str:
+    """Save a Blink dashboard YAML to the workspace. Live immediately, no draft step.
+
+    A file with an `id` updates that dashboard (only what changed is sent; widgets missing
+    from the file are never deleted). A file without one creates a dashboard, or returns
+    `[BLOCKED EXISTS]` if the display name is taken. Rewrites the file with the server's
+    widget ids, then runs every widget's query once and reports any that fail."""
+    return dashboards.save_dashboard(path)
+
+
+@mcp.tool(name="publish_dashboard")
+def _publish_dashboard(dashboard: str, share_with: list[str]) -> str:
+    """Publish a dashboard (id or editor URL) to the Blink Portal and share it with users
+    (name or email) and groups (name). They see its data, including the rows behind each
+    chart, without needing access to the workspace.
+
+    The plugin's PreToolUse hook makes Claude Code ask the user before every call. Before
+    calling, tell the user in plain words which dashboard goes to whom."""
+    return dashboards.publish_dashboard(dashboard, share_with)
 
 
 if __name__ == "__main__":

@@ -52,7 +52,7 @@ def catalog_root():
 
 def workspace_root():
     """Where this user's own Blink workspace content lives, inside the project repo —
-    workflows, agents, connections, tables. One parent folder so workspace data is
+    workflows, agents, connections, tables, dashboards. One parent folder so workspace data is
     visibly separate from the repo's own files."""
     return Path("workspace")
 
@@ -82,3 +82,14 @@ def agent_editor_url(agent_id):
     controller, workspace, _ = require_env()
     app_base = controller.removesuffix("/api/v1")
     return f"{app_base}/workspace/{workspace}/agents/agent-builder/{agent_id}"
+
+
+def dashboard_editor_url(dashboard_id):
+    """Clickable dashboard-editor link — the app URL, not the API one.
+
+    The UI calls a dashboard an "application", so the editor lives at
+    applications/:dashboard_id/edit in the app.
+    """
+    controller, workspace, _ = require_env()
+    app_base = controller.removesuffix("/api/v1")
+    return f"{app_base}/workspace/{workspace}/applications/{dashboard_id}/edit"
