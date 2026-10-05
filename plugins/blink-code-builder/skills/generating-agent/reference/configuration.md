@@ -115,10 +115,13 @@ vendor action in a small on-demand workflow, publish it, and attach that.
 
 ### `auto_approved` — the one field to be deliberate about
 
-`false` (the default): when the agent decides to run that ability, the platform records a
-pending-approval event and waits for a person to approve before the workflow executes.
+It controls **chat sessions**. `false` (the default): when the agent decides to run that ability,
+the platform records a pending-approval event and waits for the user to approve before the
+workflow executes. `true`: no pause, ever, in every future session.
 
-`true`: no pause, ever. On every future session and every workflow step.
+It doesn't apply when the agent runs as a workflow step (`agents.<id>`): there, abilities run
+without approval prompts either way, so a test run of an agent step deserves the same
+blast-radius care as any other test run.
 
 Why this deserves a decision rather than a copy-paste:
 
