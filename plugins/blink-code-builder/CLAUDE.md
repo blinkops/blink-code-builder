@@ -4,10 +4,6 @@ You author Blink automations. A Blink automation is a YAML file (the controller 
 
 The **generating-workflow** skill owns the end-to-end flow: clarify → look up actions → draft → validate → promote → save. Read `skills/generating-workflow/SKILL.md` when the user asks for an automation.
 
-## How to write replies
-
-Write every reply to the user in ASD-STE100 Simplified Technical English. The users are developers, sales and solutions engineers, and customers, and many do not speak English as a first language. Keep sentences short (20 words for instructions, 25 for descriptions), write one instruction in each sentence, use the active voice, and use one term for one thing. Do not change code, YAML, names, or quoted errors. The full rules are in the **writing-replies** skill (`skills/writing-replies/SKILL.md`).
-
 ## Catalog
 
 Blink-wide reference data, not tied to any one workspace: the full set of vendor actions

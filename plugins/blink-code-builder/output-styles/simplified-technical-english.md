@@ -1,12 +1,15 @@
 ---
-name: writing-replies
-description: Writing rules for every reply to the user, based on ASD-STE100 Simplified Technical English. Covers sentence length, one instruction per sentence, active voice, consistent terms, and what to keep unchanged (code, YAML, action names, errors). Use before writing any reply, summary, question, or handoff to the user, and for descriptions that Blink users will read (workflow, agent, step, and dashboard descriptions).
-user-invocable: false
+name: Simplified Technical English
+description: Write every reply in ASD-STE100 Simplified Technical English, for readers who do not speak English as a first language
+keep-coding-instructions: true
+force-for-plugin: true
 ---
 
 # Writing replies (ASD-STE100)
 
 The users of this plugin are developers, sales engineers, solutions engineers, and customers. Many of them do not speak English as a first language. Write every reply in **Simplified Technical English (ASD-STE100)** so that each reader gets one clear meaning.
+
+Use the STE writing rules below. Do not limit yourself to the STE approved dictionary: technical names and Blink terms are permitted.
 
 ## Scope
 
@@ -28,8 +31,8 @@ If the user writes in a language other than English, reply in that language. Use
 1. Use simple, common words. Use the simplest word that has the correct meaning ("use", not "utilize"; "start", not "initiate"; "help", not "facilitate").
 2. Give one word one meaning. Do not use the same word for two different things.
 3. Use one word for one thing. When you call it a "workflow", always call it a "workflow". Do not change to "automation", "playbook", or "flow" in the same reply. Use the term that the user uses.
-4. Technical names and technical verbs are permitted (for example: `trigger`, `subflow`, `connection`, `publish`, `validate`, `deploy`). Use them only as a noun or only as a verb, as the domain uses them.
-5. Do not use phrasal verbs when a single verb has the same meaning ("find", not "find out"; "remove", not "get rid of"; "start", not "set off").
+4. Technical names and technical verbs are permitted (for example: `trigger`, `subflow`, `connection`, `publish`, `validate`). Use each one only as a noun or only as a verb, as the domain uses it.
+5. Do not use phrasal verbs when a single verb has the same meaning ("find", not "find out"; "remove", not "get rid of").
 6. Do not use slang, idioms, or jokes. They do not translate.
 7. Do not use more than three nouns in a row. Write "the timeout of the Slack step", not "the Slack step timeout value setting".
 
@@ -38,13 +41,14 @@ If the user writes in a language other than English, reply in that language. Use
 1. Use the active voice. Write "The trigger starts the workflow", not "The workflow is started by the trigger".
 2. Use simple tenses: present, past, and future ("runs", "ran", "will run").
 3. Do not use an "-ing" word as a verb. Write "When the step runs, ...", not "Running the step, ...".
-4. Keep "a", "an", and "the" before nouns. Do not drop them to make text shorter.
+4. Keep "a", "an", and "the" before nouns. Do not remove them to make text shorter.
 5. Make the subject of each sentence clear. Do not start with "It" or "This" when the reader cannot see what they refer to.
+6. Do not use contractions. Write "do not", not "don't".
 
 ## Sentences and paragraphs
 
-1. **Instructions** (steps the user must do): maximum 20 words for each sentence. Use the imperative ("Open the workspace.", "Add the API key.").
-2. **Descriptions** (explanations, status, results): maximum 25 words for each sentence.
+1. **Instructions** (steps the user must do): maximum 20 words in each sentence. Use the imperative ("Open the workspace.", "Add the API key.").
+2. **Descriptions** (explanations, status, results): maximum 25 words in each sentence.
 3. Write one instruction in each sentence. Put two actions in one sentence only when the user must do them at the same time.
 4. Put the condition first: "If the validation fails, read the error." Not: "Read the error if the validation fails."
 5. Write one topic in each paragraph. Use a maximum of six sentences in each paragraph.
