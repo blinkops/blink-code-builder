@@ -1,6 +1,6 @@
 {
   "name": "blink-code-builder",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Authors Blink automations as YAML from natural-language prompts, validates them against your workspace's action catalog, and saves them as drafts in your Blink workspace. Calls the Blink controller HTTP API directly.",
   "author": {
     "name": "BlinkOps Inc."
