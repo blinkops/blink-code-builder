@@ -46,7 +46,7 @@ Walk the user through reaching the menu:
 
 Then guide them field-by-field. If they already gave you values in their original message (e.g. their Blink URL), tell them what to type in the field — don't re-ask. They paste / type each value into the menu themselves; nothing goes through chat.
 
-- **Blink URL** — Their Blink domain (whatever URL they sign in at, e.g. `https://blink.app.blinkops.com`). **Don't include `/api/v1`** — the plugin appends it.
+- **Blink URL** — Their Blink domain (whatever URL they sign in at). **Don't include `/api/v1`** — the plugin appends it.
 - **Blink user API key** — Sensitive. Tell them to open `<their-blink-url>/user/profile/apikeys` in their browser, paste an existing key or click **Create**, then paste it into the **Blink user API key** field. Don't have them paste it into chat.
 - **Blink workspace ID** — Visible in their browser URL inside Blink: in `https://<blink>/workspaces/<uuid>/...` the UUID after `/workspaces/` is the workspace ID. Tell them to copy that UUID into the field.
 - **Blink pack ID** — Leave blank.

@@ -12,9 +12,8 @@
     "blink_controller_url": {
       "type": "string",
       "title": "Blink URL",
-      "description": "Your Blink domain, e.g. https://blink.app.blinkops.com",
-      "required": true,
-      "default": "https://blink.app.blinkops.com"
+      "description": "Your Blink domain",
+      "required": true
     },
     "blink_user_api_key": {
       "type": "string",
