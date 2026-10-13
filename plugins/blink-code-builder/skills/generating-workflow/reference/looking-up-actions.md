@@ -26,8 +26,11 @@ workspace/                             # this workspace's own content, kept as r
 │   └── <name>.yaml                    # one fetched agent
 ├── connections/
 │   └── connections.tsv                # greppable: name <TAB> type_name — the workspace's bound connections
-└── tables/
-    └── tables-schema.yaml             # every table's schema (no row data)
+├── tables/
+│   └── tables-schema.yaml             # every table's schema (no row data)
+└── dashboards/
+    ├── dashboards-list.yaml           # every dashboard + a summary of its widgets
+    └── <name>.yaml                    # one fetched dashboard
 ```
 
 The workspace's own callable actions — its workflows and agents — live in the repo, as `workspace/workflows/workflows-list.tsv` and `workspace/agents/agents-list.tsv` (see below).

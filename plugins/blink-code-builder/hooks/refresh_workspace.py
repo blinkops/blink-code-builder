@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """SessionStart hook. Writes the workspace snapshot on every session: connections.tsv,
-workflows-list.tsv and agents-list.tsv. Tables stay on demand (get_tables_schema), since
-their schema costs one call per table.
+workflows-list.tsv and agents-list.tsv. Tables and dashboards stay on demand
+(get_tables_schema, list_dashboards), since each costs one call per table or dashboard.
 
 Config: CLAUDE_PLUGIN_OPTION_BLINK_{CONTROLLER_URL,USER_API_KEY,WORKSPACE_ID}.
 """
