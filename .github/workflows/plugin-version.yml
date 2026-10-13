@@ -1,0 +1,43 @@
+name: Plugin version
+
+on:
+  pull_request:
+    paths:
+      - "plugins/blink-code-builder/**"
+      - ".claude-plugin/**"
+
+jobs:
+  version-bump:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Require a version bump and a changelog entry
+        env:
+          BASE: origin/${{ github.base_ref }}
+          MANIFEST: plugins/blink-code-builder/.claude-plugin/plugin.json
+        run: |
+          new=$(jq -r .version "$MANIFEST")
+          old=$(git show "$BASE:$MANIFEST" | jq -r .version)
+          echo "base: $old, PR: $new"
+          if [ "$new" = "$old" ]; then
+            echo "::error file=$MANIFEST::The plugin changed but the version did not. Installed users will not get this change. Increase \"version\"."
+            exit 1
+          fi
+          if [ "$(printf '%s\n%s\n' "$old" "$new" | sort -V | tail -1)" != "$new" ]; then
+            echo "::error file=$MANIFEST::The new version ($new) must be greater than $old."
+            exit 1
+          fi
+          if ! grep -q "^## $new\$" CHANGELOG.md; then
+            echo "::error file=CHANGELOG.md::Add a \"## $new\" section to CHANGELOG.md."
+            exit 1
+          fi
+
+      - name: Keep the version in plugin.json only
+        run: |
+          if jq -e '.plugins[] | select(.name == "blink-code-builder") | has("version")' .claude-plugin/marketplace.json > /dev/null; then
+            echo "::error file=.claude-plugin/marketplace.json::Remove \"version\" from the marketplace entry. plugin.json is the single source."
+            exit 1
+          fi

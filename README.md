@@ -24,6 +24,20 @@ mid-session.
 You'll need a Blink user API key, and **Contributor or above** in the target workspace. The
 company-level "Builder" role alone carries no workflow permissions.
 
+## Update
+
+To see your installed version, run `claude plugin list`. Compare it with
+[CHANGELOG.md](CHANGELOG.md). To get the latest version:
+
+```
+claude plugin marketplace update blink-marketplace
+claude plugin update blink-code-builder@blink-marketplace
+```
+
+The new version loads in your next session, or run `/reload-plugins` in a running one. To get
+updates automatically, open `/plugin` → **Marketplaces** → `blink-marketplace` and turn on
+**Enable auto-update** (it is off by default for this marketplace).
+
 ## What it can do to your workspace
 
 The bundled `blink` MCP server reads your connections and playbooks, saves drafts, triggers test
