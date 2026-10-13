@@ -7,20 +7,22 @@ user-invocable: false
 
 # Setting up blink-code-builder
 
-For non-developers on macOS using the Claude Code CLI. Do system-level prerequisite installs *for* the user; for plugin config, **never edit settings files yourself** — the user types every value into Claude Code's plugin menu. Never echo `CLAUDE_PLUGIN_OPTION_BLINK_*` values back to them.
+For non-developers using the Claude Code CLI on macOS or Windows. Do system-level prerequisite installs *for* the user; for plugin config, **never edit settings files yourself** — the user types every value into Claude Code's plugin menu. Never echo `CLAUDE_PLUGIN_OPTION_BLINK_*` values back to them.
 
 ## 1. Python prerequisites
 
-The SessionStart hook installs `httpx`/`pyyaml` via `pip install --user --break-system-packages`. The flag was added in pip 23.0.1 (Feb 2023), and old pip rejects unrecognized flags — so the plugin requires **Python 3.11+** (which ships pip ≥ 23.1 by default). macOS Command Line Tools currently ships Python 3.9 + pip 21, which is too old; install via Homebrew instead.
+The plugin runs its hooks and MCP server with the command `python3`, so `python3` must work as-is. The SessionStart hook installs `httpx`/`pyyaml` via `pip install --user --break-system-packages`. The flag was added in pip 23.0.1 (Feb 2023), and old pip rejects unrecognized flags — so the plugin requires **Python 3.11+** (which ships pip ≥ 23.1 by default).
 
 Run in parallel:
 
 - `python3 --version`
 - `python3 -m pip --version`
 
-**Python 3.11+ and pip 23+** → continue to step 2.
+**Python 3.11+ and pip 23+** → continue to step 2. Otherwise, follow your platform's section below.
 
-**Anything else (missing, too old, or pip too old)** → install via Homebrew:
+### macOS
+
+macOS Command Line Tools currently ships Python 3.9 + pip 21, which is too old; install via Homebrew instead.
 
 1. Check `brew --version`.
 2. If Homebrew is missing, tell the user you're about to install it: it's an open-source package manager, takes ~5–10 minutes, downloads several hundred MB, and **prompts for their login password during install**. Once they OK it, run:
@@ -31,7 +33,23 @@ Run in parallel:
 3. With `brew` available, run `brew install python`. This installs the current Python 3.x release with an up-to-date pip.
 4. Re-verify: `python3 --version` should report 3.11+ and `python3 -m pip --version` should report 23+.
 
-If install fails, surface the error and ask — don't loop or guess. After step 1 is clean, every subsequent invocation of `python3` (including from the SessionStart hook in step 3) will pick up the Homebrew install via PATH.
+### Windows
+
+The plugin's hooks are bash commands, so Windows needs **Git for Windows** (Claude Code runs hooks in Git Bash). Check `git --version`; if missing, tell the user, then run `winget install -e --id Git.Git`.
+
+For Python:
+
+1. If `python3 --version` prints nothing or opens the Microsoft Store, that's the Windows placeholder, not a real Python.
+2. Install Python: `winget install -e --id Python.Python.3.13`. If `winget` is missing, send the user to https://www.python.org/downloads/windows/ and tell them to tick **Add python.exe to PATH** in the installer.
+3. Ask the user to quit and reopen Claude Code so the new PATH is picked up, then check `python --version`.
+4. The python.org installer provides `python` but no `python3`. If `python3 --version` still fails, add one next to the real interpreter:
+   ```
+   python -c "import shutil, sys, pathlib; exe = pathlib.Path(sys.executable); shutil.copy(exe, exe.with_name('python3.exe'))"
+   ```
+   If `python3` still opens the Store, tell the user to turn off the `python3.exe` entry in Windows Settings → Apps → Advanced app settings → **App execution aliases**.
+5. Re-verify: `python3 --version` should report 3.11+ and `python3 -m pip --version` should report 23+.
+
+If install fails, surface the error and ask — don't loop or guess. After step 1 is clean, every later call to `python3` (including from the SessionStart hook in step 3) finds the new install via PATH.
 
 ## 2. userConfig values
 
@@ -70,8 +88,10 @@ This step fundamentally requires the user — Claude can't restart its own host 
 
 In the new session:
 
-- `ls "${CLAUDE_PLUGIN_DATA}/catalog/"` should list `actions/`, `triggers/`, `actions.tsv`, `triggers.tsv`.
-- `wc -l "${CLAUDE_PLUGIN_DATA}/catalog/actions.tsv"` should report a few hundred to a few thousand lines.
+- The catalog dir `${CLAUDE_PLUGIN_DATA}/catalog/` should hold `actions/`, `triggers/`, `actions.tsv`, `triggers.tsv`.
+- `actions.tsv` should have a few hundred to a few thousand lines.
+
+Check both with one `python3 -c` call so it works the same on macOS and Windows.
 
 To confirm the env vars reached the scripts, run a short Python check that prints only `set`/`unset` for each of `CLAUDE_PLUGIN_OPTION_BLINK_{CONTROLLER_URL,USER_API_KEY,WORKSPACE_ID,PACK_ID}`. **Never print the actual values.**
 

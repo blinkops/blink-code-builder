@@ -90,7 +90,7 @@ Read and grep only inside:
 
 - the catalog cache (`${CLAUDE_PLUGIN_DATA}/catalog/`)
 - this repo (the working directory)
-- `/tmp/` for scratch drafts
+- `/tmp/` for scratch drafts (on Windows, use the system temp dir from `$TEMP` instead, written with forward slashes, and pass that same absolute path to the plugin tools)
 
 Do **not** search elsewhere on the user's filesystem (`~/go/`, `~/.claude/`, sibling repos, etc.) for examples or schema hints, even if they appear in the user's PATH/Go module cache. If the in-scope sources can't answer a question, ask the user instead of grepping outward.
 

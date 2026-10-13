@@ -75,12 +75,16 @@ def spawn_detached():
     log_file = (data_dir / "refresh.log").open("w")
     child_env = os.environ.copy()
     child_env["_BLINK_REFRESH_CATALOG_CHILD"] = "1"
+    # start_new_session is POSIX-only; Windows needs creation flags to outlive the hook.
+    detach = {"start_new_session": True}
+    if sys.platform == "win32":
+        detach = {"creationflags": subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP}
     subprocess.Popen(
         [sys.executable, __file__],
         env=child_env,
         stdout=log_file,
         stderr=subprocess.STDOUT,
-        start_new_session=True,
+        **detach,
     )
 
 

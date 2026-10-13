@@ -5,11 +5,11 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/refresh_catalog.py"
+            "command": "PYTHONUTF8=1 python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/refresh_catalog.py\""
           },
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/refresh_workspace.py"
+            "command": "PYTHONUTF8=1 python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/refresh_workspace.py\""
           }
         ]
       }
@@ -31,7 +31,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/refresh_workspace.py"
+            "command": "PYTHONUTF8=1 python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/refresh_workspace.py\""
           }
         ]
       },
@@ -40,7 +40,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/refresh_workspace.py"
+            "command": "PYTHONUTF8=1 python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/refresh_workspace.py\""
           }
         ]
       }
