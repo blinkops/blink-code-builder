@@ -9,20 +9,25 @@ test-runs and publishes it.
 
 ## Install
 
-```
-/plugin marketplace add blinkops/blink-code-builder
-/plugin install blink-code-builder@blink-marketplace
-```
+You need `python3` (3.9 or later) and **Contributor or above** in the target Blink workspace.
+The company-level "Builder" role alone carries no workflow permissions. You do not need an API key.
 
-Then ask Claude to set up the plugin. The bundled `setup-blink-plugin` skill handles the rest:
-Python prerequisites, walking you through the four config values (`/plugin` → **Configure options**),
-and verifying the catalog populated.
+1. Add the marketplace and install the plugin:
 
-After setting the config values, **quit Claude Code and reopen it** — they don't take effect
-mid-session.
+   ```
+   /plugin marketplace add blinkops/blink-code-builder
+   /plugin install blink-code-builder@blink-marketplace
+   ```
 
-You'll need a Blink user API key, and **Contributor or above** in the target workspace. The
-company-level "Builder" role alone carries no workflow permissions.
+2. Open `/plugin` → **Installed** → **blink-code-builder** → **Configure options**. Enter two values:
+   - **Blink URL**: the domain you sign in at, for example `https://acme.app.blinkops.com`.
+   - **Blink workspace ID**: the UUID after `/workspaces/` in your browser URL inside Blink.
+3. Quit Claude Code and open it again. On the first start, the plugin registers its Blink MCP
+   server for your URL and asks you to restart one more time.
+4. Run `/mcp`, select **blink-code-builder**, choose **Authenticate**, and sign in with your Blink login.
+
+If a step fails, ask Claude to set up the plugin. The bundled `setup-blink-plugin` skill checks
+each step and fixes what is missing.
 
 ## Update
 
@@ -38,9 +43,19 @@ The new version loads in your next session, or run `/reload-plugins` in a runnin
 updates automatically, open `/plugin` → **Marketplaces** → `blink-marketplace` and turn on
 **Enable auto-update** (it is off by default for this marketplace).
 
+### Updating from 0.2.x to 0.3.0
+
+Version 0.3.0 connects through the remote Blink MCP server and your own Blink login. It no longer
+uses an API key. After you update:
+
+1. Quit Claude Code and open it again, two times (the plugin registers its MCP server on the first start).
+2. Run `/mcp`, select **blink-code-builder**, and sign in with your Blink login.
+
+Your Blink URL and workspace ID stay as they are. The old API key and pack ID values are no longer used.
+
 ## What it can do to your workspace
 
-The bundled `blink` MCP server reads your connections and playbooks, saves drafts, triggers test
+The remote Blink MCP server, signed in as you, reads your connections and playbooks, saves drafts, triggers test
 runs, fetches run logs, and publishes.
 
 ## Safety

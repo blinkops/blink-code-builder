@@ -12,7 +12,7 @@ The `triggers:` block is a map keyed by **category** (`scheduled`, `webhooks`, `
 
 > **Top-level `inputs:` are only valid for `on_demand`.** Scheduled and event automations run from a fixed signal — there's no caller to provide input values. For event automations, read from the trigger payload via `{{ event.payload.* }}` instead.
 
-> **Sanity-check after save.** Trigger shape mistakes silently strip on save (the controller parses but doesn't echo bad shapes back). Always re-read `GET /playbooks/{id}/draft` after a save and confirm the `triggers:` block survived. Wrong shapes don't fail validation but break the trigger card in the UI ("click to select an event").
+> **Sanity-check after save.** Trigger shape mistakes silently strip on save (the controller parses but doesn't echo bad shapes back). Always call `fetch_automation` after a save and confirm the `triggers:` block survived. Wrong shapes don't fail the save but break the trigger card in the UI ("click to select an event").
 
 ## `on_demand`
 

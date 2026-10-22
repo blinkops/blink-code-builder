@@ -1,7 +1,7 @@
 ---
 name: managing-dashboards
 description: Build, edit and publish Blink dashboards — charts, numbers, tables, text and HTML widgets over Blink Tables — as YAML files saved straight to the workspace. Use when the user asks to create a dashboard, add or change a widget, move or resize widgets, see which dashboards exist, or publish/share a dashboard to the Blink Portal.
-allowed-tools: Read, Write, Edit, Grep, Glob, mcp__plugin_blink-code-builder_blink__list_dashboards, mcp__plugin_blink-code-builder_blink__fetch_dashboard, mcp__plugin_blink-code-builder_blink__validate_dashboard, mcp__plugin_blink-code-builder_blink__save_dashboard, mcp__plugin_blink-code-builder_blink__publish_dashboard, mcp__plugin_blink-code-builder_blink__get_tables_schema
+allowed-tools: Read, Write, Edit, Grep, Glob, mcp__blink-code-builder__list_dashboards, mcp__blink-code-builder__fetch_dashboard, mcp__blink-code-builder__validate_dashboard, mcp__blink-code-builder__save_dashboard, mcp__blink-code-builder__publish_dashboard, mcp__blink-code-builder__get_workspace_resources
 user-invocable: false
 ---
 
@@ -33,7 +33,7 @@ workspace/dashboards/
                            its widgets, summarized   re-synced after save/publish)
   soc_overview.yaml   ◄──────────────────────►     the dashboard and its widgets
 workspace/tables/
-  tables-schema.yaml       the tables and columns a widget can read (get_tables_schema)
+  tables-schema.yaml       the tables and columns a widget can read (get_workspace_resources, include_tables=true)
 
   you edit ──► validate_dashboard ──► save_dashboard ──► (optional) publish_dashboard
                   (local)          (live, rewrites file    (Portal + sharing,
@@ -49,7 +49,7 @@ nothing refreshes it at session start.
 ## Look up the tables first
 
 Never guess a table or column name. Read `workspace/tables/tables-schema.yaml`; if it's
-missing, more than 24h old, or a table changed this session, run `get_tables_schema`. Use a
+missing, more than 24h old, or a table changed this session, run `get_workspace_resources` with `include_tables=true`. Use a
 table's `table` value (not `display_name`) as `table_name`, and its `columns[].name` values
 as `column`, `group_by_column` and `aggregation_column`.
 

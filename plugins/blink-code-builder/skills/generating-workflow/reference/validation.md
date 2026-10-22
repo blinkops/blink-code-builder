@@ -1,70 +1,67 @@
 # Validation reference — generating-workflow
 
-Referenced from [../SKILL.md](../SKILL.md) step 5. Run the validator, read errors, fix, repeat. Cap at **3 iterations**. If a 4th would start, stop and show the user the last YAML plus remaining errors — don't burn more tokens guessing.
+Referenced from [../SKILL.md](../SKILL.md) steps 5–6. Two layers: you self-check the draft against the catalog and the checklist below, then `save_automation` runs the controller's validation. Cap the save-fix loop at **3 iterations**. If a 4th would start, stop and show the user the last YAML plus remaining errors — don't burn more tokens guessing.
 
-## How to run it
+## What checks what
 
-Call the `validate_automation` tool with `path: "<path/to/automation.yaml>"`.
+- **You, before saving** — every row of the checklist below. Nothing else catches most of them before a test run.
+- **The plugin's save check** — a hook on `save_automation` refuses the call when an action isn't in the local catalog (almost always a typo) and names the actions. Look up the right `full_name` and re-call.
+- **The controller, on save** — invalid YAML comes back as a tool error with the controller's message. Read **all** of it, fix everything in one pass, re-save.
+- **Catalog missing** — if `${CLAUDE_PLUGIN_DATA}/catalog/` is missing or empty, call `export_catalog` once (a hook saves it to disk). If that tool is missing or fails, stop and tell the user to run `/mcp` and sign in to Blink — you can't safely verify action names without it. A **code-only revision** (only inputs/code inside existing steps changed, no new actions) can go ahead without it.
 
-The returned text carries the outcome:
-- `[OK]` — structurally valid. The output also includes a **Test run readiness** section (see below) — read it, but readiness blockers don't fail this step.
-- `[ERROR]` (one or more lines) — errors in the YAML. The full error list is in the returned text. Fix everything in one pass where possible.
-- `[CATALOG MISSING]` — catalog missing. For a **new** automation, **stop and tell the user** — the `SessionStart` hook is responsible for populating the catalog; if it's not there, config is wrong or the controller is unreachable, and you can't safely verify invented action names. For a **code-only revision** (you only changed inputs/code inside existing steps, no new actions), re-call with `allow_missing_catalog: true`: the validator drops to degraded mode (structural + embedded-Python checks) and skips action-existence/enum/readiness. Don't try to refresh the catalog from the skill.
-- A hard failure (e.g. file not found) surfaces as a tool error rather than any of the text markers above.
+## Test-run readiness
 
-## Test run readiness
+Check these before the test run (step 8 of the SKILL flow) — the same checks the UI uses to enable the "Test run" button:
 
-After `[OK]`, the tool's returned text includes either `Test run readiness: READY` or `Test run readiness: BLOCKED` followed by the specific reasons. This mirrors the same checks the UI uses to enable the "Test run" button (see step 8 of the SKILL flow):
+- **Connections** — a step's action requires a connection and none is set on the step. Ask the user which existing connection to use; don't fabricate names.
+- **Data** — a step's required action input is empty (the key is *present* but the value is empty). Patch the YAML if the value is obvious from the user's prompt; otherwise ask.
+- **Runtime inputs** — the playbook declares required `inputs` with no `default`. Either give them defaults or have the user supply Test Parameters in the UI before running.
 
-- `[CONNECTIONS]` — a step's action requires a connection and none is set on the step. Ask the user which existing connection to use; don't fabricate names.
-- `[DATA]` — a step's required action input is empty (passes structural validation because the key is *present* but the value is empty). Patch the YAML if the value is obvious from the user's prompt; otherwise ask.
-- `[RUNTIME_INPUTS]` — the playbook declares required `inputs` with no `default`. Either give them defaults or have the user supply Test Parameters in the UI before running.
+All clear means `trigger_test_run` can run it — no need to ask the user to click anything.
 
-`READY` means the `trigger_test_run` tool can fire the run automatically — no need to ask the user to click anything.
+## Pre-save checklist
 
-## Error categories and fixes
-
-| Error pattern | Root cause | Fix |
+| Check | Root cause | Fix |
 |---|---|---|
-| `YAML parse: ... while scanning an alias ...` (+ `[HINT]`) | A value starts with an unquoted `*` — most often a cron expression (`*/5 * * * *`). YAML reads leading `*` as an alias reference. | Quote it: `cron: "*/5 * * * *"`. See [yaml-formatting.md](yaml-formatting.md). |
-| `YAML parse: ... mapping values are not allowed here ...` (+ `[HINT]`) | An unquoted scalar contains `: ` (colon + space), which YAML reads as a new mapping key. | Quote the value, or use a literal block scalar (`\|`) for multi-line/colon-containing text. See [yaml-formatting.md](yaml-formatting.md). |
-| `YAML parse: ... sequence entries are not allowed here ...` (+ `[HINT]`) | An unquoted scalar starts with `- ` (dash + space), which YAML reads as a list entry. | Quote the value, or use a literal block scalar (`\|`). See [yaml-formatting.md](yaml-formatting.md). |
-| `duplicate key '<x>' at line N` | The same key appears twice in one mapping (e.g. two `Content:` entries on a step). YAML doesn't error on this — it silently keeps the last one. | Decide whether the two were meant to be merged (e.g. into one block-scalar value) or whether one is leftover — don't just delete one blindly. See [yaml-formatting.md](yaml-formatting.md). |
-| `parameter <name> looks like an unquoted YAML boolean/number ...` | A text-typed parameter's value was implicitly coerced by YAML (e.g. `NO` → `False`, `1.20` → `1.2`, `007` → `7`). | Quote the value so it round-trips as the literal string intended. See [yaml-formatting.md](yaml-formatting.md). |
-| `top-level \`workflow\` missing` | The draft forgot the `workflow:` key. | Add a `workflow:` list with exactly one section (named `Steps`) containing steps. |
-| `a step calls this automation's own playbook id (...)` | A step's `automations.<uuid>` points at the automation itself. | Remove the self-call — a subflow must never call itself. See [subflows.md](../../subflows/SKILL.md). |
-| `top-level \`automation_type\` must be one of ...` | Typo or invented value. | Only `on_demand`, `scheduled`, or `event`. |
-| `section '<x>': step missing \`id\`` | A step is missing `id`. | Assign sequential `S1`, `S2`, ... |
-| `step <id>: missing \`action\`` | Step has no action reference. | Look up the intended action via [looking-up-actions.md](looking-up-actions.md). Never invent action names. |
-| `duplicate step id '<x>'` | Two steps share an id. | Re-number so every id in the flattened workflow is unique. |
-| `action '<full_name>' not in catalog. Did you mean: <a>, <b>, <c>?` | Action name typo or wrong service prefix. | Read the suggested action files (parallel reads), pick one, copy the exact `full_name`. If none match, re-grep `actions.tsv` by capability. |
-| `action 'automations.<uuid>' is not callable in this workspace` | No callable row in `workspace/workflows/workflows-list.tsv`. Either the uuid is wrong/deleted, or the target workflow is a draft, deactivated, or not `on_demand` — none of those are callable as a subflow. | Check `workspace/workflows/workflows-list.tsv` for the row: it needs `automation_type=on_demand`, `state=published`/`modified`, and `active=true` to be callable — use its `id` column as `automations.<id>`. If it's not there yet, `fetch_automation` the intended workflow and ask the user to publish/activate it. Never invent an id. See [subflows/SKILL.md](../../subflows/SKILL.md). |
-| `agent 'agents.<uuid>' is not callable in this workspace` | No callable row in `workspace/agents/agents-list.tsv`. Either the uuid is wrong/deleted, or the agent has never been published. | Check `workspace/agents/agents-list.tsv` for a `published`/`modified` row and use its `id` column as `automations.<id>`. If it's not there yet, publish the agent first. Never invent an id. See the `generating-agent` skill. |
-| `input '<x>' missing` (required) | A required parameter wasn't supplied. | Re-read the action JSON for its `parameters[]`. Supply a value or **ask the user** — don't fabricate. |
-| `input <name>=<v> not in options [...]` | Value doesn't match the parameter's enum. | Pick one of the listed options verbatim (case matters). |
-| `input <name> references unknown step id '<x>'` | `{{ steps.Sx.output }}` refers to a step that doesn't exist. | Correct the id. Remember flow-control children have their own ids. |
-| `step <id> (core.python): Python SyntaxError: <msg> (line N)` | Inline Python in a `core.python`/`core.pythonV2` step doesn't parse. | Fix the syntax at the reported line. (Bodies containing `{{ }}` template expressions are skipped — they aren't standalone Python.) |
-| `input '<x>': must be a parameter-definition object ... got '<value>'` | Top-level `inputs.<x>` is a bare value instead of a `{type, required, default, ...}` object. | Wrap it as a full param definition. This isn't just a lint nit — the controller silently corrupts a bare value by indexing it char-by-char in storage. |
-| `input '<x>': missing required \`type\`` | A top-level input has no `type` field. | Add one of the valid types (`text`, `number`, `single-select`, ...). Without it the UI can't render the input field for a manual run. See the PlaybookInputParamDefinition shape in [handling-sparse-actions.md](handling-sparse-actions.md). |
-| `step <id> (internal.SetVariables): 'Variables[i]' uses lowercase key(s) [...]` | `Variables` entries used `name`/`type`/`value` instead of `Name`/`Type`/`Value`. | Capitalize the keys. Lowercase keys are silently dropped at runtime, not rejected. |
-| `step <id> (internal.SetVariables): 'Variables[i]' missing required key(s) [...]` | A `Variables` entry is missing `Name`, `Type`, or `Value`. | Supply all three keys on every entry. |
-| `step <id> (internal.SetVariables): 'Variables[i].Type' '<x>' is not one of the confirmed values` (`[WARN]`, doesn't fail) | `Type` isn't one of the confirmed values (`String`, `Number`, `List`). | Usually a typo/casing issue (e.g. `number` instead of `Number`). Unconfirmed values aren't necessarily wrong — verify with a test run if you need one outside this set. |
-| `step <id> (<action>): 'web_form_inputs' must be a dict keyed by field name ... got list` | `web_form_inputs` was written as a list (easy mix-up with `SetVariables`' list shape). | Use a dict keyed by field name, e.g. `web_form_inputs: {my_field: {type: text, index: 1}}`. |
-| `step <id>: uses singular 'connection:' key` | Step declared `connection: <name>` instead of the plural map. | Use `connections: {<type>: <name>}`. The singular key is silently dropped at runtime. |
-| `step <id> (<full_name>): connection key '<x>' is not one of this action's connection_types. Did you mean: <a>, <b>?` | The `connections:` key on the step is a wrong or transposed integration slug (e.g. a multi-word vendor name with its parts reordered) — the action `full_name` is fine but the connection never binds at runtime. | Use the suggested slug. Confirm it against the action's `connection_types` in the catalog, and use that **same** slug for the action `full_name`, the step's `connections:` key, and the trigger. Never type a vendor slug from memory. |
+| A value starts with an unquoted `*` | Most often a cron expression (`*/5 * * * *`). YAML reads leading `*` as an alias reference — parse error. | Quote it: `cron: "*/5 * * * *"`. See [yaml-formatting.md](yaml-formatting.md). |
+| An unquoted scalar contains `: ` (colon + space) | YAML reads it as a new mapping key — parse error. | Quote the value, or use a literal block scalar (`\|`) for multi-line/colon-containing text. See [yaml-formatting.md](yaml-formatting.md). |
+| An unquoted scalar starts with `- ` (dash + space) | YAML reads it as a list entry — parse error. | Quote the value, or use a literal block scalar (`\|`). See [yaml-formatting.md](yaml-formatting.md). |
+| The same key appears twice in one mapping | E.g. two `Content:` entries on a step. YAML doesn't error on this — it silently keeps the last one. | Decide whether the two were meant to be merged (e.g. into one block-scalar value) or whether one is leftover — don't just delete one blindly. See [yaml-formatting.md](yaml-formatting.md). |
+| A text-typed parameter's bare value looks like a boolean/number | YAML coerces it (e.g. `NO` → `False`, `1.20` → `1.2`, `007` → `7`). | Quote the value so it round-trips as the literal string intended. See [yaml-formatting.md](yaml-formatting.md). |
+| Top-level `workflow` present | The draft forgot the `workflow:` key. | Add a `workflow:` list with exactly one section (named `Steps`) containing steps. |
+| No step calls this automation's own id | A step's `automations.<uuid>` points at the automation itself. | Remove the self-call — a subflow must never call itself. See [subflows/SKILL.md](../../subflows/SKILL.md). |
+| `automation_type` is valid | Typo or invented value. | Only `on_demand`, `scheduled`, or `event`. |
+| Every step has an `id` | A step is missing `id`. | Assign sequential `S1`, `S2`, ... |
+| Every step has an `action` | Step has no action reference. | Look up the intended action via [looking-up-actions.md](looking-up-actions.md). Never invent action names. |
+| Step ids are unique | Two steps share an id. | Re-number so every id in the flattened workflow is unique. |
+| Every action is in the catalog | Action name typo or wrong service prefix. The save hook refuses these. | Grep `actions.tsv` by capability, read the candidate files (parallel reads), pick one, copy the exact `full_name`. |
+| `automations.<uuid>` is callable | No callable row in `workspace/workflows/workflows-list.tsv`. Either the uuid is wrong/deleted, or the target workflow is a draft, deactivated, or not `on_demand` — none of those are callable as a subflow. | The row needs `automation_type=on_demand`, `state=published`/`modified`, and `active=true` — use its `id` column as `automations.<id>`. If it's not there yet, `fetch_automation` the intended workflow and ask the user to publish/activate it. Never invent an id. See [subflows/SKILL.md](../../subflows/SKILL.md). |
+| `agents.<uuid>` is callable | No `published`/`modified` row in `workspace/agents/agents-list.tsv`. Either the uuid is wrong/deleted, or the agent has never been published. | Use the row's `id` column as `agents.<id>`. If it's not there yet, publish the agent first. Never invent an id. See the `generating-agent` skill. |
+| Required inputs supplied | A required parameter wasn't supplied. | Re-read the action JSON for its `parameters[]`. Supply a value or **ask the user** — don't fabricate. |
+| Enum values match | Value doesn't match the parameter's options. | Pick one of the listed options verbatim (case matters). |
+| `{{ steps.Sx.output }}` ids exist | The reference points at a step that doesn't exist. | Correct the id. Remember flow-control children have their own ids. |
+| Inline Python parses | Python in a `core.python`/`core.pythonV2` step has a syntax error. | Fix it. (Bodies containing `{{ }}` template expressions aren't standalone Python — check them by eye.) |
+| Top-level `inputs.<x>` is a parameter-definition object | It's a bare value instead of a `{type, required, default, ...}` object. | Wrap it as a full param definition. This isn't just a lint nit — the controller silently corrupts a bare value by indexing it char-by-char in storage. |
+| Every top-level input has a `type` | Without it the UI can't render the input field for a manual run. | Add one of the valid types (`text`, `number`, `single-select`, ...). See the PlaybookInputParamDefinition shape in [handling-sparse-actions.md](handling-sparse-actions.md). |
+| `internal.SetVariables` keys are capitalized | `Variables` entries used `name`/`type`/`value` instead of `Name`/`Type`/`Value`. | Capitalize the keys. Lowercase keys are silently dropped at runtime, not rejected. |
+| Every `Variables` entry has `Name`, `Type`, `Value` | An entry is missing one. | Supply all three keys on every entry. |
+| `Variables[i].Type` is `String`, `Number`, or `List` | Usually a typo/casing issue (e.g. `number`). | Fix the casing. Other values aren't necessarily wrong — verify with a test run if you need one outside this set. |
+| `web_form_inputs` is a dict | Written as a list (easy mix-up with `SetVariables`' list shape). | Use a dict keyed by field name, e.g. `web_form_inputs: {my_field: {type: text, index: 1}}`. |
+| No singular `connection:` key | Step declared `connection: <name>` instead of the plural map. | Use `connections: {<type>: <name>}`. The singular key is silently dropped at runtime. |
+| `connections:` keys are the action's `connection_types` | A wrong or transposed integration slug (e.g. a multi-word vendor name with its parts reordered) — the action `full_name` is fine but the connection never binds at runtime. | Copy the slug from the action's `connection_types` in the catalog, and use that **same** slug for the action `full_name`, the step's `connections:` key, and the trigger. Never type a vendor slug from memory. |
 
 ## Loop protocol
 
-Never leave an unvalidated YAML in the user's repo.
+Never leave YAML the controller rejected in the user's repo.
 
 1. Draft to `/tmp/<name>.yaml` (scratch).
-2. Call `validate_automation` against the scratch file.
-3. On `[OK]` → promote the file to `workspace/workflows/<name>.yaml`, then call `save_automation`.
-4. On `[ERROR]` → read **all** error lines (they surface together), apply fixes in one pass, re-call. Cap at **3 iterations**.
-5. On `[CATALOG MISSING]` → for a new automation, stop and ask the user to check `userConfig` and `${CLAUDE_PLUGIN_DATA}/refresh.log`; don't try to recover from inside the skill. For a code-only revision, re-call with `allow_missing_catalog: true` and continue.
-6. If iteration 4 would start (genuine YAML errors the validator keeps rejecting), stop. Report the last errors and what you tried. Don't keep guessing.
+2. Run the checklist above against it.
+3. Read the file and call `save_automation` with its content as `yaml` (and the `automation_id` when updating an existing one).
+4. On success → promote the file to `workspace/workflows/<name>.yaml`.
+5. On a refused call or a tool error → read **all** reported problems, apply fixes in one pass, re-save. Cap at **3 iterations**.
+6. If iteration 4 would start, stop. Report the last errors and what you tried. Don't keep guessing.
 
-For revisions on an **existing** automation: draft the edit into `/tmp/`, validate there, and only overwrite `workspace/workflows/<name>.yaml` once `[OK]`. Don't echo the new YAML in your response — the user reviews via `git diff`.
+For revisions on an **existing** automation: draft the edit into `/tmp/`, save from there, and only overwrite `workspace/workflows/<name>.yaml` once the save succeeds. Don't echo the new YAML in your response — the user reviews via `git diff`.
 
 ## Input format
 
@@ -84,14 +81,14 @@ inputs:
 ```
 
 - `type` — required; must be lowercase. Valid values: `text`, `long-text`, `rich-text`, `number`, `checkbox`, `single-select`, `multi-select`, `date`, `connections`, `file`, `list`, `dynamic_text`.
-- `required` — if `true` and no `default` is set, the user must supply a value at run time (surfaced as `[RUNTIME_INPUTS]` by the validator).
+- `required` — if `true` and no `default` is set, the user must supply a value at run time.
 - `index` — 1-based display order in the UI.
-- `default` — optional; must be a valid value for the declared `type` (the validator checks this).
+- `default` — optional; must be a valid value for the declared `type`.
 - `options` — required for `single-select` and `multi-select` types.
 
 ### Required inputs and test runs
 
-If any input has `required: true` and no `default`, the validator will report `[RUNTIME_INPUTS]`. This means the automation **cannot be test-run automatically** — the user must open the UI, fill in the Test Parameters, and click Test Run themselves. When this happens:
+If any input has `required: true` and no `default`, the automation **cannot be test-run automatically** — the user must open the UI, fill in the Test Parameters, and click Test Run themselves. When this happens:
 
 1. Tell the user which inputs need values.
 2. Either ask the user to provide defaults (so you can patch them into the YAML and re-save), or instruct them to supply the values in the UI's Test Parameters panel before running.
@@ -120,14 +117,13 @@ Rules:
 - When an action has `auto_pagination: true`, the runtime wraps pages as `{"results": [...]}` — access via `{{steps.<id>.output.results}}`.
 - Omit `outputs:` entirely when the automation doesn't need to return structured data.
 
-### Validator errors for outputs
+### Checking outputs
 
-The validator does **not** currently check `outputs:` values — broken `{{steps.X}}` references in `outputs:` are silently ignored at validation time. Use the same step-id discipline here as in step inputs to avoid runtime surprises.
+Broken `{{steps.X}}` references in `outputs:` aren't caught on save. Use the same step-id discipline here as in step inputs to avoid runtime surprises.
 
 ## Don't over-correct
 
 Some fixes are judgment calls, not purely mechanical:
 
 - A required param asks for `connections:` (the plural type→name map) and the user hasn't said which → **ask**. Don't pick arbitrarily.
-- The suggestion list has three similar actions and none clearly matches → **ask** which one the user intended.
-- `[WARN]` lines are fine to ship. Don't chase them unless they block save.
+- A catalog grep returns three similar actions and none clearly matches → **ask** which one the user intended.

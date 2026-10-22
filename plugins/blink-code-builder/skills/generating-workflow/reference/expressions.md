@@ -83,4 +83,4 @@ Inside `core.pythonV2`, access workflow data via `context.*` — **not** `{{ …
 
 ## Validation
 
-`validate_automation` checks that `{{ steps.<id>.output... }}` references a declared step id. It does not parse expression bodies — syntax errors in `len(...)`, `date_format(...)`, or bad `rvalue` quoting only surface at runtime. Re-read the examples above when writing a new expression.
+Before saving, check that every `{{ steps.<id>.output... }}` references a declared step id — nothing else catches a wrong id before the test run. Expression bodies aren't checked on save — syntax errors in `len(...)`, `date_format(...)`, or bad `rvalue` quoting only surface at runtime. Re-read the examples above when writing a new expression.
