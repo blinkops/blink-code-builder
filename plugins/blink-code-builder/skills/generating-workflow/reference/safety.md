@@ -5,8 +5,8 @@ tickets actually open, deletes actually delete. The controller has no sandbox mo
 moment of highest risk in this skill is the `trigger_test_run` tool — one keystroke away from, say,
 a Slack message to everyone in the org (a real incident that motivated this file).
 
-Two layers keep that in check: draft small by default, and confirm explicitly before running
-anything the tool flags.
+Two layers keep that in check: draft small by default, and make sure the user knows the risks
+before anything runs.
 
 ## What counts as high blast radius
 
@@ -21,8 +21,8 @@ Think "how many people/objects does this touch, and can it be undone?":
 - **Writes at scale** — any write action inside a loop fed by an unbounded query result
   (create a ticket per row, update every matching record).
 - **Identity and access changes** — password resets, permission changes, key rotation.
-- **Production-looking targets** — connection or resource names suggesting prod. The scan
-  can't reliably detect this; use judgment and when in doubt, ask.
+- **Production-looking targets** — connection or resource names suggesting prod. The plugin's
+  scan can't detect this; use judgment and when in doubt, ask.
 
 ## Draft small by default
 
@@ -40,66 +40,65 @@ needed for risk that was never created:
   at handoff.
 
 These are drafting defaults, not bans — if the user explicitly asked for the wide version,
-build the wide version and just make sure the test-run confirmation (below) names the scope.
+build the wide version and just make sure what you tell the user before the run (below) names the scope.
 
-## The gate: `[BLOCKED SAFETY]`
+## The gate: Claude Code's approval prompt
 
-The `trigger_test_run` tool scans the draft before opening the run. Any match on the patterns
-above (destructive action names, messaging inside `internal.for`, broadcast mentions) →
-it returns a `[BLOCKED SAFETY]` block listing the flagged steps **without running**. When that happens:
+`trigger_test_run` and `publish_automation` never run on their own: a plugin hook makes Claude
+Code ask the user first, and the prompt lists the risks it found in the YAML at save time
+(destructive action names, messaging inside `internal.for`, broadcast mentions, human-wait
+steps). The prompt is the user's gate — your job is to make sure they understand it before it
+appears:
 
-1. **Translate the findings for the user** — plain language, concrete scope. Not
-   "S6 matched MESSAGING_ACTION_PATTERN" but "step S6 sends a Slack message once per row of
-   the S4 query — that could be one message or five hundred, and I can't tell from the YAML.
-   The channel is #ai-quality."
-2. **Ask a direct yes/no question.** If there's a cheap way to shrink the radius first
-   (add a `LIMIT`, retarget to a test channel for this run), offer it as the alternative.
-3. **Only after an explicit yes**, re-call with `acknowledge_risks: true`. The approval is per-run —
-   a yes for this test run is not standing approval for future runs or for publishing.
-4. **If the user says no or wants changes**, patch the YAML (→ Revising flow), re-save,
-   re-run the gate fresh.
+1. **Tell the user what will happen, in plain language, before you call the tool** — concrete
+   scope, not pattern names. Not "S6 matched a messaging pattern" but "step S6 sends a Slack
+   message once per row of the S4 query — that could be one message or five hundred, and I
+   can't tell from the YAML. The channel is #ai-quality." Do this even when the scan found
+   nothing — it can miss things (prod targets, writes at scale).
+2. **If there's a cheap way to shrink the radius first** (add a `LIMIT`, retarget to a test
+   channel for this run), offer it before running.
+3. **Then call the tool.** Claude Code shows the approval prompt; the user answers it.
+4. **If the user declines the prompt, don't retry.** Ask what they want instead — usually a
+   patched YAML (→ Revising flow), re-saved, then a fresh run.
 
-Never pass `acknowledge_risks: true` preemptively, "to save a round trip," or because a previous
-run was approved. The whole point is that a human sees the blast radius before it happens.
+Never call either tool on your own initiative or "to save a round trip." Each approval covers
+one call — a yes for this test run is not standing approval for future runs or for publishing.
 
-## Human-wait steps: `[BLOCKED HUMAN_WAIT]`
+## Human-wait steps
 
 Separate from blast radius: a step that waits for a *person* (`internal.Sleep` with
 `Mode: Web Form Response`, or `wait_for_response: true`) can't be exercised by an automatic
 test run at all. The two observed failure modes are opposites — the Sleep mode parks the run
 until a human answers or an hours-scale timeout expires, while `wait_for_response: true` has
 been observed to *not* wait in test runs, continuing instantly with an empty response. Either
-way the automatic test is meaningless, so the tool refuses (`[BLOCKED HUMAN_WAIT]`) and there
-is **no override flag**. The resolution is a hand-off, not an acknowledgment:
+way the automatic test is meaningless, so **don't call `trigger_test_run`** for such a draft.
+The resolution is a hand-off:
 
 1. Tell the user why the automatic run is skipped (one sentence, name the step).
-2. Give them the full editor link the tool returns —
-   and ask them to click **Test Run** and answer the form themselves.
-3. When they confirm it finished, fetch results with the `get_run_log` tool and report as usual.
+2. Ask them to open the workflow in the Blink editor, click **Test Run**, and answer the form
+   themselves.
+3. When they confirm it finished, ask for the execution id of that run, fetch results with the
+   `get_run_log` tool (`execution_id`), and report as usual.
 
-Don't offer to rewrite the workflow to get past this gate — the wait may be exactly what the
+Don't offer to rewrite the workflow to get past this — the wait may be exactly what the
 user asked for. Design alternatives (trigger-based split) belong at drafting time, as a
 question (see "Worth asking about" in the SKILL), never as a silent change.
 
 ## Publishing: the highest-stakes moment
 
 A test run executes once, supervised. **Publishing changes what every future scheduled and
-triggered run executes** — the risk repeats on every trigger, unattended. The `publish_automation` tool
-therefore gates harder than the test tool:
+triggered run executes** — the risk repeats on every trigger, unattended. So:
 
-- **`[BLOCKED UNTESTED]`.** The current draft must be byte-identical to a draft that
-  completed a successful test run (evidence recorded by the `trigger_test_run` tool, or by
-  the `get_run_log` tool for runs the user triggered manually). Two ways to hit this gate: the draft
-  was never tested, or it was **edited after** the test — in which case what passed the test is
-  not what would go live. The fix is always "test it first." The `allow_untested: true` override is
-  for the user who, after hearing that warning, explicitly insists again — a single "just
-  publish it" is not enough, and Claude never passes the override on its own.
-- **`[BLOCKED SAFETY]`.** The same blast-radius scan as the test gate, re-run at
-  publish time, and **prior approvals don't carry over** — a yes for the test run covered one
-  supervised execution, not a standing schedule. Present the flagged steps again, remind the
-  user they'll fire on every future trigger, and re-call with `acknowledge_risks: true` only after a
-  fresh explicit yes.
-- **Before asking for the yes**, summarize the automation in plain language: when it runs (the
+- **Only when the user asked.** Publish only when the user asked for it in this conversation.
+- **Only after a passed test of the current draft.** The saved draft must have completed a test
+  run (`state` = `Completed`) and not been edited since — otherwise what passed is not what
+  would go live. The fix is always "test it first." Publish untested only if the user, after
+  hearing that warning, explicitly accepts it. The approval prompt also says whether the saved
+  YAML passed a test (it only knows about runs started with `trigger_test_run`).
+- **Restate the risks, fresh.** Prior approvals don't carry over — a yes for the test run
+  covered one supervised execution, not a standing schedule. Describe the flagged steps again
+  and remind the user they'll fire on every future trigger.
+- **Before calling the tool**, summarize the automation in plain language: when it runs (the
   trigger), what it does, who/what it touches. The user should be able to approve the publish
   from the summary alone, without re-reading the YAML.
 
@@ -108,7 +107,6 @@ therefore gates harder than the test tool:
 The scan is heuristic (name patterns), so it will sometimes flag benign steps — e.g. an
 action named `RemoveLabel` on a single ticket. That's fine and by design: the cost of a
 false positive is one quick question; the cost of a false negative is a Slack blast to the
-org. Don't try to pre-empt or argue the gate away — relay the question, let the user answer.
-If a specific action is flagged run after run in a repo and the user is tired of confirming
-it, that's feedback for the plugin maintainer (a per-repo acknowledgment list could be added,
-like the connections allowlist) — not a reason to auto-pass the override.
+org. Don't try to pre-empt or argue the gate away — explain the risk, let the user answer the
+prompt. If a specific action is flagged run after run in a repo and the user is tired of
+confirming it, that's feedback for the plugin maintainer.

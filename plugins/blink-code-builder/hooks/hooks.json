@@ -5,42 +5,101 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/refresh_catalog.py"
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/register_mcp.py\""
           },
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/refresh_workspace.py"
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/refresh_catalog.py\""
+          },
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/refresh_workspace.py\""
           }
         ]
       }
     ],
     "PreToolUse": [
       {
-        "matcher": "mcp__plugin_blink-code-builder_blink__publish_dashboard",
+        "matcher": "mcp__blink-code-builder__(save_automation|trigger_test_run|publish_automation|publish_agent|delete_table|edit_table)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/safety_gate.py\" pre"
+          }
+        ]
+      },
+      {
+        "matcher": "mcp__blink-code-builder__publish_dashboard",
         "hooks": [
           {
             "type": "command",
             "command": "echo '{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"permissionDecision\": \"ask\", \"permissionDecisionReason\": \"Publishing shares this dashboard and its data, including the rows behind each chart, with the people you named.\"}}'"
           }
         ]
+      },
+      {
+        "matcher": "mcp__blink-code-builder__export_catalog|mcp__blink-code-builder__get_workspace_resources",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"permissionDecision\": \"allow\", \"permissionDecisionReason\": \"Read-only setup fetch of the action catalog and the workspace lists.\"}}'"
+          }
+        ]
       }
     ],
     "PostToolUse": [
       {
-        "matcher": "mcp__plugin_blink-code-builder_blink__publish_automation",
+        "matcher": "mcp__blink-code-builder__(save_automation|save_agent|trigger_test_run)",
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/refresh_workspace.py"
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/safety_gate.py\" post"
           }
         ]
       },
       {
-        "matcher": "mcp__plugin_blink-code-builder_blink__publish_agent",
+        "matcher": "mcp__blink-code-builder__(fetch_automation|fetch_agent)",
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/refresh_workspace.py"
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/save_fetched.py\""
+          }
+        ]
+      },
+      {
+        "matcher": "mcp__blink-code-builder__export_catalog",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/refresh_catalog.py\" --save"
+          }
+        ]
+      },
+      {
+        "matcher": "mcp__blink-code-builder__get_workspace_resources",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/refresh_workspace.py\" --save"
+          }
+        ]
+      },
+      {
+        "matcher": "mcp__blink-code-builder__(publish_automation|publish_agent)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/refresh_workspace.py\""
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/check_setup.py\""
           }
         ]
       }
