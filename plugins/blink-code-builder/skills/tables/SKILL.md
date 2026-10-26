@@ -1,7 +1,7 @@
 ---
 name: tables
 description: Use Blink Tables (the internal no-code database) from inside a workflow — the 15 tables.*/system.Table* actions covering rows, schema, and files, query/write-mode choices, and looking up real column names before drafting. Auto-triggered from generating-workflow the moment a step needs a Table, whether the step is new or being edited in an existing workflow; never a standalone command.
-allowed-tools: Read, Grep, mcp__blink-code-builder__get_workspace_resources
+allowed-tools: Read, Grep, mcp__plugin_blink-code-builder_blink__get_tables_schema
 user-invocable: false
 ---
 
@@ -29,7 +29,7 @@ new steps, but recognize `system.Table*` steps in a workflow you're revising.
 | `tables.CreateOrUpdateRecordV3` | Update the record(s) matching a condition, or create one if none matches — the upsert action. Prefer this over a separate exists-check + branch. Default `record_data_format` ("Entire record") **blanks any field left empty, even on an update** — use "By field" to touch just specific columns. |
 | `tables.UpdateRecords` | Update multiple existing records in one call (JSON array of `{id, ...fields}`). |
 | `tables.DeleteRecordsV2` | Delete record(s) by id or by condition. Irreversible, and a condition can match more than one row. |
-| `tables.GetTableSchema` | Get one table's column schema live, at run time (e.g. the table name is only known from a prior step). For drafting, prefer `get_workspace_resources` with `include_tables=true` instead — see below. |
+| `tables.GetTableSchema` | Get one table's column schema live, at run time (e.g. the table name is only known from a prior step). For drafting, prefer this skill's `get_tables_schema` tool instead — see below. |
 | `tables.CreateTableFromData` | Create a new table from a block of JSON data, inferring columns. |
 | `tables.GetFileContent` | Read a file from a File/Attachment column. `show_output: true` returns text-based content under `output.content`; binaries (images, PDFs) may not come back as usable string content — work by `file_name` instead. |
 | `tables.UpdateFileColumn` | Write a file to a File/Attachment column via `file_name` (an identifier from an upstream step's output). **Leaving `file_name` empty clears the column** — not a no-op. Flag this if `file_name` comes from an expression that could evaluate to empty. |
@@ -51,8 +51,8 @@ Never guess a column name or type. Before drafting any step that reads or writes
 Table, read `workspace/tables/tables-schema.yaml` in the user's repo — one entry per table, with
 its columns, types, and required/unique/reference flags. If the file is missing, or its
 modified time (check with `stat` / `ls -la`) is more than 24h old, or the user mentioned
-changing a table this session, call `get_workspace_resources` with `include_tables=true` first to regenerate it
-(a hook overwrites the whole file).
+changing a table this session, call the `get_tables_schema` tool first to regenerate it
+(no arguments; it overwrites the whole file).
 
 **Use the `table` field's value, not `display_name`, when writing a step's `table:`
 input.** A table's `display_name` (e.g. "Incidents") is only the human-readable label
@@ -69,10 +69,10 @@ against that table.
 
 `system.TableClear` (wipes every row) and `system.TableRemove` (deletes the table) are
 fully irreversible; `tables.DeleteRecordsV2` deletes matching rows. All three are caught
-by the plugin's safety check: Claude Code asks the user to approve `trigger_test_run` and
-`publish_automation`, listing destructive steps — see [../generating-workflow/reference/safety.md](../generating-workflow/reference/safety.md)
-for the flow. Nothing further to do here: before either call, describe the step in plain
-language, same as any other destructive action.
+by the safety gate the `trigger_test_run`/`publish_automation` tools already run before
+executing anything — see [../generating-workflow/reference/safety.md](../generating-workflow/reference/safety.md)
+for the confirmation flow. Nothing further to do here: describe the step in plain
+language when the gate flags it, same as any other destructive action.
 
 ## Lifecycle: test runs, drafts, publishing
 

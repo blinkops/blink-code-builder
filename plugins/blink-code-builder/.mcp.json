@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "blink": {
+      "command": "python3",
+      "args": ["-m", "servers.blink.server"],
+      "env": {
+        "PYTHONPATH": "${CLAUDE_PLUGIN_ROOT}",
+        "CLAUDE_PLUGIN_OPTION_BLINK_CONTROLLER_URL": "${user_config.blink_controller_url}",
+        "CLAUDE_PLUGIN_OPTION_BLINK_USER_API_KEY": "${user_config.blink_user_api_key}",
+        "CLAUDE_PLUGIN_OPTION_BLINK_WORKSPACE_ID": "${user_config.blink_workspace_id}",
+        "CLAUDE_PLUGIN_OPTION_BLINK_PACK_ID": "${user_config.blink_pack_id}"
+      }
+    }
+  }
+}

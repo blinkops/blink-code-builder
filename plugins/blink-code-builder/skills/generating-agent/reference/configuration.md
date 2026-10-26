@@ -106,8 +106,8 @@ Each entry:
 | `summarize_output_instructions` | `""` | What the summary should keep. Only meaningful with `summarize_output: true`. |
 
 Get `ability_id` from `workspace/workflows/workflows-list.tsv`: a callable row's (`automation_type=
-on_demand`, `state=published`/`modified`, `active=true`) `id` column is the bare uuid, which
-is exactly what `ability_id` takes. `save_agent` rejects any `ability_id` that isn't such a workflow.
+on_demand`, `state=published`/`modified`, `active=true`) `id` column is
+`automations.<uuid>` — the `ability_id` is that uuid without the prefix.
 
 An ability can **only** be a workflow. There is no ability type for a vendor action, and no
 way to attach another workspace's workflow. To give the agent a vendor capability, wrap the
@@ -129,16 +129,14 @@ Why this deserves a decision rather than a copy-paste:
 - **It's permanent** until someone edits and republishes the agent.
 - **Where runtime workflow authoring is enabled**, an agent can create a workflow and run it
   on a later turn — so the set of things it can do is not fully fixed by your ability list.
-- **Nothing warns you at run time.** The publish approval prompt names auto-approved
-  abilities once; after that, no check and no runtime prompt.
+- **Nothing else warns you.** No server-side check, no runtime prompt.
 
 Reasonable rule of thumb: read-only enrichment and lookups are fine auto-approved — waiting on
 a reputation lookup is pure friction. Anything that changes state outside Blink should stay
 approval-gated.
 
-Before `publish_agent`, tell the user in plain words which abilities are auto-approved and
-what they can change. Claude Code then shows an approval prompt listing them (and code
-execution); if the user declines, don't retry.
+`publish_agent` returns `[BLOCKED SAFETY]` listing every auto-approved ability, and only
+proceeds after an explicit user yes passed as `acknowledge_risks: true`.
 
 ## `modes`
 
@@ -169,14 +167,16 @@ auto-approved destructive abilities, because the agent can build the composition
 
 Leave it `false` unless the user asks for it, and say what you chose.
 
-> Careful with these keys: `save_agent` stores `modes` as one object and fills a missing
-> sub-key with `false` — and a YAML with no `modes` at all turns both off. Always list both.
+> Careful with these keys: the controller stores `modes` as one JSON object, so a sub-key
+> missing from a save is stored as `false`. `save_agent` always sends both keys explicitly, so
+> enabling one mode never silently turns the other off — but if you hand-edit the YAML, list
+> both.
 
 ## `name`, `title`, `description`
 
-- `name` — keep it unique in the workspace (check `agents-list.tsv` before creating).
-  `save_agent` does not match on it: with `agent_id` it updates that agent (a rename is just
-  a new name), without `agent_id` it always creates a **new** agent.
+- `name` — unique in the workspace, and the key `save_agent` matches on to decide update vs
+  create. Renaming an agent in the YAML creates a **new** agent unless you pass the existing
+  `agent_id`.
 - `title` — short label; the UI shows `name | title` in step pickers.
 - `description` — one sentence. Read by people choosing which agent to call, so describe what
   it decides, not how.

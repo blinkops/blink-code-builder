@@ -84,7 +84,7 @@ web_form_inputs:
     options: [largest_population, longest_official_name]
 ```
 
-A list here (`web_form_inputs: [{name: question, ...}]`) is silently mishandled — check this by hand before saving.
+A list here (`web_form_inputs: [{name: question, ...}]`) fails validation/is silently mishandled — the validator now flags this structurally.
 
 ## Web form flow — step-based (ask, then continue)
 

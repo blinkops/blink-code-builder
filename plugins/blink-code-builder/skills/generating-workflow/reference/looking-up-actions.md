@@ -1,8 +1,8 @@
 # Looking up actions
 
-Referenced from [../SKILL.md](../SKILL.md) step 2. The catalog is a per-user cache of the user's Blink workspace, refreshed through the remote MCP tool `export_catalog` when the `SessionStart` hook finds it missing or stale. What's in a tenant depends on which integrations they've installed — **never assume an action exists; always confirm against the catalog.**
+Referenced from [../SKILL.md](../SKILL.md) step 2. The catalog is a per-user cache of the user's Blink workspace, refreshed by the `SessionStart` hook. What's in a tenant depends on which integrations they've installed — **never assume an action exists; always confirm against the catalog.**
 
-If the catalog is missing or empty when you go to look something up, call `export_catalog` once (a hook saves it to disk). If that tool is missing or fails, stop and tell the user to run `/mcp` and sign in to Blink.
+If the catalog is missing or empty when you go to look something up, stop and tell the user. The hook couldn't populate it — usually means `userConfig` isn't set, or the controller is unreachable. Don't try to refresh from inside the skill.
 
 ## Where it lives
 
@@ -39,7 +39,7 @@ The workspace's own callable actions — its workflows and agents — live in th
 
 `workspace/connections/connections.tsv` is a snapshot of the connections bound in this workspace, rewritten in full on every session start. Use it to pick a connection name for a step (see [../SKILL.md](../SKILL.md) — Connections).
 
-`workspace/workflows/workflows-list.tsv` and `workspace/agents/agents-list.tsv` list every workflow/agent, drafts included — a row is callable right now only once it's published (workflows also need `automation_type=on_demand` and `active=true`). Rewritten every session by the `SessionStart` hook, and after each save/publish; call `get_workspace_resources` again/`get_workspace_resources` if a file looks stale mid-session. You never need these to avoid duplicates when saving: `save_automation`/`save_agent` look the name up live and update that workflow/agent in place.
+`workspace/workflows/workflows-list.tsv` and `workspace/agents/agents-list.tsv` list every workflow/agent, drafts included — a row is callable right now only once it's published (workflows also need `automation_type=on_demand` and `active=true`). Rewritten every session by the `SessionStart` hook, and after each save/publish; re-run `list_workflows`/`list_agents` if a file looks stale mid-session. You never need these to avoid duplicates when saving: `save_automation`/`save_agent` look the name up live and update that workflow/agent in place.
 
 ## Lookup flow
 
@@ -79,17 +79,17 @@ Always pass `search` with the user's term. Provider APIs cap results (GitHub: 30
 Jira: 50, etc.) and the fetcher's `$query` filters server-side before the cap applies.
 
 ```
-fetch_options(workspace_id="<workspace_id>", fetcher_name="<fetcher_name>", search="<user-term>", inputs={"key": "val"}, connections={"type": "name"})
+fetch_options(fetcher_name="<fetcher_name>", search="<user-term>", inputs='{"key":"val"}', connections='{"type":"name"}')
 ```
 
 **Pass `connections` whenever the action has `connection_types`** (visible in
 `actions.tsv` column 4, and in the action's JSON). Use the connection name you
-already resolved for that step (from `get_workspace_resources`). Without it, fetchers
+already resolved for that step (from `list_connections`). Without it, fetchers
 that call vendor APIs return 400. Example:
 
 ```
 fetch_options(fetcher_name="azure.ListSubscriptions", connections='{"azure":"my-azure-conn"}')
-fetch_options(workspace_id="<workspace_id>", fetcher_name="github.SearchRepos", inputs={"owner": "google"}, connections={"github": "my-gh-conn"}, search="gemini")
+fetch_options(fetcher_name="github.SearchRepos", inputs='{"owner":"google"}', connections='{"github":"my-gh-conn"}', search="gemini")
 ```
 
 If `autofill.inputs` lists required sibling params, resolve those first (they may
@@ -97,13 +97,14 @@ themselves be autofill params — repeat this protocol for each dependency).
 
 **Step 3 — Read the header line and act**
 
-The tool returns a list of options, each `{value, label}`. Match the label yourself:
+The first line of the tool's returned text tells you what happened:
 
-| Result | Meaning | Action |
+| Header | Meaning | Action |
 |---|---|---|
-| One option whose `label` equals the term | Exact match | Write the input as `{display_name: <label>, value: <value>}` — done. |
-| Only partial label matches | Ambiguous | Show the candidates to the user and ask them to confirm which one. |
-| No label matches, or an empty list | No match | Retry with a shorter term (step 4). |
+| `# N results` | Exact match found | Write the input as `{display_name: <label>, value: <value>}` — done. |
+| `# no exact match for "X" — N partial matches, ask user to confirm` | Partial matches only | Show the candidates to the user and ask them to confirm which one. |
+| `# 0 matches for "X" — showing all N server results` | No client-side match | Retry with a shorter term (step 4). |
+| `# 0 results` | Server returned nothing | Retry with a shorter term (step 4). |
 
 **Step 4 — Handle no-match**
 
@@ -149,9 +150,9 @@ Flow-control and built-ins live under the `internal` and `core` services: `core.
 
 ## Calling another workflow
 
-To call another workflow as a step, don't look it up here — there's no `playbooks.<name>` action. Grep **`workspace/workflows/workflows-list.tsv`** (in the repo, not the catalog; regenerate with `get_workspace_resources` if it looks stale) and take its `id` column and write `automations.<id>` in the step. It's callable only when the row shows `automation_type: on_demand`, `active: true`, and state `published` or `modified` — otherwise (draft, deactivated, or not on-demand) see the `subflows` skill: publish it first, and never call it by name.
+To call another workflow as a step, don't look it up here — there's no `playbooks.<name>` action. Grep **`workspace/workflows/workflows-list.tsv`** (in the repo, not the catalog; regenerate with `list_workflows` if it looks stale) and take its `id` column and write `automations.<id>` in the step. It's callable only when the row shows `automation_type: on_demand`, `active: true`, and state `published` or `modified` — otherwise (draft, deactivated, or not on-demand) see the `subflows` skill: publish it first, and never call it by name.
 
 ## When lookup fails
 
-- **No grep hits** → broaden the keyword, or browse by vendor. If still nothing, tell the user — **don't invent a `full_name`**. A plugin hook refuses to save actions that aren't in the catalog anyway.
-- **Catalog empty or missing** (no `actions.tsv`) → call `export_catalog` once (a hook saves it to disk). If that tool is missing or fails, stop and tell the user to run `/mcp` and sign in to Blink.
+- **No grep hits** → broaden the keyword, or browse by vendor. If still nothing, tell the user — **don't invent a `full_name`**. The validator will reject unknown actions anyway.
+- **Catalog empty or missing** (no `actions.tsv`) → the `SessionStart` hook couldn't populate it. Stop and ask the user to check `userConfig` and `${CLAUDE_PLUGIN_DATA}/refresh.log`.

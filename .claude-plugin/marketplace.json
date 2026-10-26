@@ -11,7 +11,7 @@
     {
       "name": "blink-code-builder",
       "source": "./plugins/blink-code-builder",
-      "description": "Authors Blink automations as YAML from natural-language prompts, validates them against your workspace's action catalog, and saves them as drafts. Talks to Blink through the remote Blink MCP server, signed in with your own Blink login.",
+      "description": "Authors Blink automations as YAML from natural-language prompts, validates them against your workspace's action catalog, and saves them as drafts. Calls the Blink controller HTTP API directly.",
       "author": {
         "name": "BlinkOps Inc."
       },

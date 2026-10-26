@@ -1,4 +1,4 @@
-"""Helpers shared by the hooks (refresh_catalog, refresh_workspace, safety_gate, save_fetched).
+"""Helpers shared by the SessionStart hooks (refresh_catalog, refresh_workspace).
 
 Not a hook itself — the leading underscore keeps it out of hooks.json. Both hooks run as
 scripts from this directory, so `import _common` resolves via sys.path[0].
@@ -8,8 +8,6 @@ reachable from a hook. Doing it here means a hook's own imports stay plain impor
 top of the file.
 """
 
-import json
-import re
 import sys
 from pathlib import Path
 
@@ -17,52 +15,9 @@ _PLUGIN_ROOT = str(Path(__file__).resolve().parent.parent)
 if _PLUGIN_ROOT not in sys.path:
     sys.path.insert(0, _PLUGIN_ROOT)
 
-# Appended to the SessionStart notes that ask Claude to call a Blink tool.
-MCP_NOT_READY_NOTE = (
-    "If the Blink tools aren't found because the server is still connecting, search for them again "
-    "(it takes a few seconds). If the server needs sign-in, tell the user: \"Run /mcp, select "
-    "blink-code-builder, choose Authenticate and sign in to Blink, then send any message.\" Whenever "
-    "the tools are still missing, do this before your next answer instead; if it keeps failing, run "
-    "the setup-blink-plugin skill."
-)
-
 
 def clean_for_tsv(text, limit=200):
     """Collapse whitespace and truncate, so the value is safe as a TSV cell.
     Embedded tabs would split the row into extra columns; newlines would create fake rows.
     """
     return " ".join((text or "").split())[:limit]
-
-
-def catalog_actions():
-    """Every action full_name in the local catalog (actions.tsv), or an empty set without one."""
-    from blink_shared.config import catalog_root
-
-    try:
-        lines = (catalog_root() / "actions.tsv").read_text(encoding="utf-8").splitlines()
-    except (OSError, KeyError):
-        return set()
-    return {line.split("\t", 1)[0] for line in lines if line and not line.startswith("#")}
-
-
-def tool_result(tool_response):
-    """The tool's result object: as is, inline JSON text, or the file Claude Code saved a large
-    result to. Structured output arrives as {"result": "<the JSON text>"}."""
-    if isinstance(tool_response, list):
-        tool_response = "".join(block.get("text", "") for block in tool_response if isinstance(block, dict))
-    if isinstance(tool_response, dict):
-        result = tool_response
-    else:
-        text = str(tool_response)
-        try:
-            result = json.loads(text)
-        except json.JSONDecodeError:
-            match = re.search(r"saved to (.+?\.(?:txt|json))", text)
-            if not match:
-                raise ValueError(f"unexpected tool output: {text[:200]!r}")
-            result = json.loads(Path(match.group(1)).read_text(encoding="utf-8"))
-    if isinstance(result, dict) and isinstance(result.get("result"), str):
-        result = json.loads(result["result"])
-    if not isinstance(result, dict):
-        raise ValueError(f"unexpected tool output: {str(result)[:200]!r}")
-    return result

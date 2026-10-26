@@ -2,15 +2,17 @@
   "permissions": {
     "allow": [
       "Bash(grep * ${CLAUDE_PLUGIN_DATA}/catalog/*)",
-      "Bash(cp /tmp/*.yaml workspace/workflows/*)",
-      "Bash(cp workspace/workflows/* /tmp/*.yaml)",
-      "mcp__blink-code-builder__fetch_options",
-      "mcp__blink-code-builder__get_run_log",
-      "mcp__blink-code-builder__save_automation",
-      "mcp__blink-code-builder__fetch_automation"
+      "Bash(cp /tmp/*.yaml automations/*)",
+      "Bash(cp automations/* /tmp/*.yaml)",
+      "mcp__plugin_blink-code-builder_blink__list_connections",
+      "mcp__plugin_blink-code-builder_blink__fetch_options",
+      "mcp__plugin_blink-code-builder_blink__validate_automation",
+      "mcp__plugin_blink-code-builder_blink__get_run_log",
+      "mcp__plugin_blink-code-builder_blink__save_automation",
+      "mcp__plugin_blink-code-builder_blink__fetch_automation"
     ],
     "ask": [
-      "mcp__blink-code-builder__trigger_test_run"
+      "mcp__plugin_blink-code-builder_blink__trigger_test_run"
     ]
   }
 }

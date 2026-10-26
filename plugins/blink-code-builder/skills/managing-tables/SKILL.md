@@ -1,7 +1,7 @@
 ---
 name: managing-tables
 description: Create and manage Blink Tables at the workspace level — the table itself and its columns, not workflow steps. Use when the user asks to create a table, add a column, or otherwise manage a table's schema directly (not as part of a workflow).
-allowed-tools: Read, Grep, mcp__blink-code-builder__get_workspace_resources, mcp__blink-code-builder__create_table, mcp__blink-code-builder__edit_table, mcp__blink-code-builder__delete_table
+allowed-tools: Read, Grep, mcp__plugin_blink-code-builder_blink__get_tables_schema, mcp__plugin_blink-code-builder_blink__create_table, mcp__plugin_blink-code-builder_blink__edit_table, mcp__plugin_blink-code-builder_blink__delete_table
 user-invocable: false
 ---
 
@@ -22,8 +22,8 @@ request is unclear.
 
 ## Look up existing tables first
 
-Read `workspace/tables/tables-schema.yaml` in the user's repo (or call `get_workspace_resources` with `include_tables=true` if it's
-missing; a hook writes the file) before creating a table, to avoid creating a near-duplicate of one that already
+Read `workspace/tables/tables-schema.yaml` in the user's repo (or call `get_tables_schema` if it's
+missing) before creating a table, to avoid creating a near-duplicate of one that already
 exists.
 
 ## Field types
@@ -52,7 +52,6 @@ reference to the same table fails.
 
 ```
 create_table(
-    workspace_id="<workspace id>",
     display_name="Incidents",
     description="Open incidents tracked by the SOC",
     fields=[
@@ -63,10 +62,7 @@ create_table(
 )
 ```
 
-It returns the new table's schema: `table` (the real name steps use), `display_name`, `id`
-and `columns` (each with its derived `name`). Report the `table` name. The schema file is not
-updated by this — call `get_workspace_resources` afterwards so `workspace/tables/tables-schema.yaml`
-includes the new table.
+This syncs `workspace/tables/tables-schema.yaml` automatically on success — no separate refresh step.
 
 `with_default_fields=True` adds a generic "Name" (text) and "Number" (number) column.
 Only pass it when the user hasn't described their own columns — otherwise it leaves two
@@ -78,7 +74,6 @@ unused columns behind.
 
 ```
 edit_table(
-    workspace_id="<workspace id>",
     table="incidents",                 # the real table name, not the display name
     display_name="New Name",           # optional: rename
     description="new description",     # optional
@@ -90,10 +85,7 @@ edit_table(
 
 A `update_fields` entry needs `name` — the field's real name (from the schema file's
 `columns[].name`, not its display name). Only include the keys you want to change;
-anything left out keeps its current value. A field to add takes the same keys as in
-`create_table` (no `name`).
-
-It returns just `{table}`. Afterwards call `get_workspace_resources` to refresh the schema file.
+anything left out keeps its current value.
 
 **A field's type can never change**, no matter what — Blink's database doesn't support it.
 If the user needs a different type, that's really: add a new field with the right type,
@@ -103,17 +95,15 @@ force a type change.
 ## Removing a field is irreversible
 
 Deleting a field deletes its values in every row, permanently — there's no confirmation
-from the API itself. So an `edit_table` call with `remove_fields` gets a Claude Code approval
-prompt from the plugin:
+from the API itself. Because of this, `remove_fields` is gated:
 
-- Only remove a field the user asked to remove — never on your own initiative.
-- Before the call, tell the user in plain language which fields go and that their data in
-  every row (roughly `row_count` rows, from the schema file) is lost for good.
-- Then call `edit_table` with `remove_fields`; Claude Code asks the user to approve.
-- If they decline, don't retry — ask what they want instead.
+- Call `edit_table` without `acknowledge_risks` first — it returns a `[BLOCKED]` preview
+  naming each field and roughly how many rows lose data, and makes no change.
+- Show that preview to the user in plain language and get their go-ahead.
+- Call again with `acknowledge_risks=True` to actually remove.
 
-Blink's own system columns (id, created/updated at, created/updated by) can never be
-removed — don't try.
+A `system` or `protected` field (Blink's own id/created-at/etc. columns) can never be
+removed — the tool reports this instead of attempting it.
 
 ## Deleting a table
 
@@ -122,12 +112,10 @@ immediate, same as create/edit: no draft, no undo.
 
 It's gated the same way as `remove_fields`:
 
-- Only delete a table the user asked to delete — never on your own initiative.
-- Before the call, tell the user in plain language which table goes and roughly how many
-  rows with it (`row_count` in the schema file).
-- Then call `delete_table` with `workspace_id` and `table` (the real name); Claude Code asks
-  the user to approve. If they decline, don't retry — ask what they want instead.
-- It returns `{table}`. Afterwards call `get_workspace_resources` to refresh the schema file.
+- Call without `acknowledge_risks` first — it returns a `[BLOCKED]` preview naming the
+  table and roughly how many rows are affected, and makes no change.
+- Show that preview to the user in plain language and get their go-ahead.
+- Call again with `acknowledge_risks=True` to actually delete.
 
 Reference fields on other tables pointing at the one you're deleting aren't checked
 first — if any exist, expect the delete call to fail rather than silently break them.

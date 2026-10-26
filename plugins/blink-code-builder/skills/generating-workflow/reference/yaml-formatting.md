@@ -1,8 +1,8 @@
 # YAML formatting
 
 These are plain YAML gotchas — nothing Blink-specific — but they're the most common source of
-automations that pass a casual read, then fail either at `save_automation` (with a cryptic
-parse error from the controller) or, worse, silently produce wrong data that only surfaces in a test run. They bite
+automations that pass a casual read, then fail either at the `validate_automation` tool (with a cryptic
+PyYAML error) or, worse, silently produce wrong data that only surfaces in a test run. They bite
 model-generated YAML often enough that Blink's own server-side generator has to repair them after
 the fact. Getting these right up front is cheaper than debugging a failed test run.
 
@@ -60,8 +60,10 @@ inputs:
 ```
 
 This is the most dangerous class of mistake here because nothing about it looks wrong: the file
-parses, and the save accepts it. Scan your draft for repeated keys before saving. When you find
-one, don't just delete one of the two entries — check whether you actually meant to combine them (e.g. two `Content:` lines
+parses, the `validate_automation` tool used to see nothing wrong either. It now runs a duplicate-key
+scan on the raw YAML text (independent of the normal parse) and reports each repeated key with its
+line number, before the file ever reaches a test run. If you see that error, don't just delete one
+of the two entries — check whether you actually meant to combine them (e.g. two `Content:` lines
 that should have been one multi-line block scalar) or genuinely lost content by overwriting a step.
 
 ## Rule: quote string values that collide with YAML's implicit types
@@ -79,8 +81,9 @@ zip: 007             # -> 7     (leading zeros silently dropped)
 
 Quote any value that could collide with a boolean word (`yes`/`no`/`true`/`false`/`on`/`off`, any
 case) or that needs its exact digits/format preserved (version strings, zip/postal codes, IDs with
-leading zeros): `country: "NO"`, `version: "1.20"`. The tell: the catalog says a parameter is a plain
-text field, but the bare value would parse as a bool or number.
+leading zeros): `country: "NO"`, `version: "1.20"`. The `validate_automation` tool now flags this when
+the catalog says a parameter is a plain text field but the parsed YAML value came back as a bool
+or number — that mismatch is the tell.
 
 ## Related, action-specific gotchas
 
