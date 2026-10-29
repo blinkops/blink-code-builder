@@ -10,6 +10,8 @@ Sets the top-level `automation_type:` and (when needed) the `triggers:` block. P
 
 The `triggers:` block is a map keyed by **category** (`scheduled`, `webhooks`, `polling`), and each category's value is a **list** even with one entry. Vendor triggers go inside the list as objects with `trigger_type`, `name`, and optionally `inputs`.
 
+> **Exactly one trigger per automation.** The workflow engine refuses to run a workflow with more than one trigger in total (`only one trigger is allowed`) — one category, one list entry. Categories are `scheduled`, `webhooks`, `polling`, `error`, `notification`, and `webforms` (form submissions — see [handling-sparse-actions.md](handling-sparse-actions.md)). The full rule list is in [engine-validation.md](engine-validation.md) — Triggers.
+
 > **Top-level `inputs:` are only valid for `on_demand`.** Scheduled and event automations run from a fixed signal — there's no caller to provide input values. For event automations, read from the trigger payload via `{{ event.payload.* }}` instead.
 
 > **Sanity-check after save.** Trigger shape mistakes silently strip on save (the controller parses but doesn't echo bad shapes back). Always call `fetch_automation` after a save and confirm the `triggers:` block survived. Wrong shapes don't fail the save but break the trigger card in the UI ("click to select an event").
@@ -57,6 +59,8 @@ triggers:
 
 If you can't find the requested trigger in `triggers.tsv`, fall back to `custom_webhook` — that's the universal generic webhook entry.
 
+`name` is required on every webhook entry (`name is required`). If you set `method`, it must be `apikey` or `signature` (`method should be apikey or signature`).
+
 ## `event` — polling
 
 For vendor triggers that **poll** an external service (GitHub, Jira, email-on-new-message, ...). These appear in `triggers.tsv` with names like `github.OnNewPullRequest`, `github.OnMergedPullRequest`, `email.OnNewMessage`. Use `polling:` instead of `webhooks:`, and include the trigger's required `inputs`.
@@ -67,6 +71,7 @@ triggers:
   polling:
     - trigger_type: github.OnNewPullRequest
       name: On New Pull Request
+      polling_interval_minutes: 5
       inputs:
         owner:
           value: mycompany
@@ -75,6 +80,8 @@ triggers:
           value: myRepo
           display_name: myRepo
 ```
+
+Polling entries need `trigger_type` and `name` (`trigger type is required` / `name is required`) and a `polling_interval_minutes` between 1 and 60 — leaving it out fails the run with `interval must be between 1 and 60 minutes`. Use the user's cadence; if they gave none, pick one (e.g. `5`) and mention it at handoff. Any trigger `connections` need non-empty keys and values.
 
 Note the `{value, display_name}` wrapping on string inputs — the UI uses `display_name` for the chip label and `value` as the actual parameter. For workflow-step inputs the controller often accepts a bare string and wraps it on save, but for trigger inputs supply both fields up front.
 

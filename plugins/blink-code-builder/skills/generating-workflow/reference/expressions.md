@@ -51,19 +51,53 @@ When tempted to add a `core.pythonV2` step for date arithmetic, string formattin
 
 ## Conditions (`internal.ifCondition`)
 
+Single sentence — **omit `match`**:
+
 ```yaml
 - action: internal.ifCondition
   id: S4
   inputs:
     condition:
-      match: And                    # And | Or
       sentence:
         - lvalue: '{{ inputs.data_type }}'
-          op: Equals                 # Equals | Not equals | Greater than | ...
-          rvalue: '"a literal string"'
+          op: Equals
+          rvalue: 'a literal string'
+  steps:
+    - action: internal.ifTrueBranch
+      id: S5
+      steps: [...]
+    - action: internal.ifFalseBranch
+      id: S6
+      steps: [...]
 ```
 
+Two or more sentences — `match: And` or `match: Or` (capitalized):
+
+```yaml
+    condition:
+      match: And
+      sentence:
+        - lvalue: '{{ inputs.data_type }}'
+          op: Equals
+          rvalue: '"a literal string"'
+        - lvalue: '{{ steps.S2.output.count }}'
+          op: Greater than
+          rvalue: '0'
+```
+
+The engine rejects `match` with a single sentence, two sentences without `match`, a sentence without `lvalue`, and any `op` not in this exact list: `Equals`, `Not equals`, `Less than`, `Less or equals to`, `Greater than`, `Greater or equals to`, `Contains`, `Not Contains`, `Starts with`, `Ends with`, `Regex match`, `Is empty`, `Is not empty`, `Is true`, `Is false`. Every branch step needs its own `id`, and `continue_on_error: true` isn't allowed on the if step or its branches.
+
 Notice `rvalue` wraps a literal string in quotes *inside* the YAML string (`'"..."'`). That's deliberate — expr evaluates the rvalue, so a bare string identifier would be read as a variable.
+
+**Compare like with like.** Work out the `lvalue`'s type (from the input's `type`, the variable's `Type`, or the action's `example_output`) and write an `rvalue` of the same type. Never compare a boolean to a string, or a number to a string:
+
+| `lvalue` type | Write | Not |
+|---|---|---|
+| Boolean | `op: Is true` / `op: Is false`, no `rvalue` | `op: Equals` with `rvalue: '"true"'` or `'"yes"'` |
+| Number | `op: Greater than` (etc.) with `rvalue: '0'` | `rvalue: '"0"'` |
+| String | `op: Equals` with `rvalue: '"production"'` | `rvalue: 'true'` or `rvalue: '1'` against a text field |
+
+If you can't tell the type, check the action's `example_output` before writing the condition.
 
 ## Python and Bash steps
 
@@ -73,9 +107,33 @@ Inside `core.pythonV2`, access workflow data via `context.*` — **not** `{{ …
 - `context.steps.S1.output` — full output of a prior step (already a Python object — don't `json.loads()` it).
 - `context.steps.S1.output["field"]` / `.field` — nested access.
 - `context.steps.S1.status` — `"OK"` or `"Failed"`.
-- `context.variables.<name>` — execution variables (assignable: `context.variables.foo = value`).
+- `context.variables.<name>` — execution variables (read only — see below).
 - `context.event.payload` — event payload (event-triggered automations).
 - `context.metadata.<name>` — automation metadata.
+
+**Never write bare `context.steps`** — always follow it with a specific step id: `context.steps.S1.output`, `context.steps.S1.status`. Not `context.steps`, `context.steps["S1"]`, `context.steps.get(...)`, `for s in context.steps`, or `getattr(context.steps, …)`. This applies to the whole file, including comments, docstrings, and strings — a `# loop over context.steps` comment breaks it too.
+
+**Never assign variables in Python** (`context.variables.foo = "some value"`). Print the values as a JSON map instead, and set them in an `internal.SetVariables` step right after:
+
+```yaml
+- action: core.pythonV2
+  id: S3
+  inputs:
+    code: |
+      import json
+      rows = context.steps.S2.output
+      print(json.dumps({"top_name": rows[0]["name"], "row_count": len(rows)}))
+- action: internal.SetVariables
+  id: S4
+  inputs:
+    Variables:
+      - Name: top_name
+        Type: String
+        Value: '{{ steps.S3.output.top_name }}'
+      - Name: row_count
+        Type: Number
+        Value: '{{ steps.S3.output.row_count }}'
+```
 
 **Why not `{{ steps.S1.output }}` inside Python?** Blink renders structured outputs into the `code:` string as Python repr (single quotes, `True`/`None`) — `json.loads()` fails at column 1. `context.steps.S1.output` gives you the parsed object directly.
 

@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<!--
+  Blink HTML widget starter. Copy it, then:
+  - Replace __DATA__ with a JSON array of rows (a workflow does this on refresh; use sample rows
+    until then). Rename the fields in the script to the table's columns.
+  - Keep the token block as is. Write only component CSS below it.
+  - Keep the html-widget:ready message at the end of the script.
+-->
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Blink widget</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Roboto:wght@400;500;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ── Blink tokens: do not change ─────────────────────────────────────────── */
+:root {
+  --bg-app: #16181D; --bg-surface: #202227; --bg-surface-2: #26282D; --bg-surface-3: #2D2F35;
+  --bg-elevated: #3C3D42; --bg-glass: rgba(22,24,29,0.85);
+  --border-subtle: rgba(255,255,255,0.06); --border-default: rgba(255,255,255,0.10);
+  --border-strong: rgba(255,255,255,0.20); --border-accent: #18A0FB; --border-glow: #18A0FB;
+  --text-primary: #FFFFFF; --text-secondary: rgba(255,255,255,0.85); --text-muted: rgba(255,255,255,0.70);
+  --text-tertiary: rgba(255,255,255,0.50); --text-dim: rgba(255,255,255,0.30);
+  --accent: #18A0FB; --accent-hover: #1D8AD2; --accent-soft: rgba(24,160,251,0.12); --accent-glow: rgba(24,160,251,0.20);
+  --cta: #22BB5F; --cta-hover: #4ED16B; --cta-soft: rgba(34,187,95,0.12);
+  --sev-critical: #E34B36; --sev-critical-bg: rgba(227,75,54,0.12);
+  --sev-high: #FF8686; --sev-high-bg: rgba(255,134,134,0.12);
+  --sev-medium: #FFA200; --sev-medium-bg: rgba(255,162,0,0.12);
+  --sev-low: #6D94FB; --sev-low-bg: rgba(109,148,251,0.12);
+  --sev-info: #A3A3A3; --sev-info-bg: rgba(163,163,163,0.12);
+  --success: #22BB5F; --success-bg: rgba(34,187,95,0.12);
+  --warning: #FFA200; --warning-bg: rgba(255,162,0,0.12);
+  --danger: #FF6666; --danger-bg: rgba(255,102,102,0.12);
+  --status-in-progress: #18A0FB; --status-completed: #9EDA3C; --status-error: #FF6666;
+  --status-failed: #FF6666; --status-stopped: #A3A3A3;
+  --cat-1: #18A0FB; --cat-2: #00BCC8; --cat-3: #7A66F9; --cat-4: #9966FF;
+  --cat-5: #BC51E2; --cat-6: #F9784F; --cat-7: #F6C13F; --cat-8: #8BC34A;
+  --font-sans: 'Inter', 'Roboto', ui-sans-serif, system-ui, Helvetica, Arial, sans-serif;
+  --font-mono: 'JetBrains Mono', 'RobotoMono', 'SourceCodePro', ui-monospace, 'SF Mono', Menlo, monospace;
+  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 20px;
+  --space-6: 24px; --space-8: 32px; --space-10: 40px; --space-12: 48px; --space-16: 64px;
+  --radius-sm: 4px; --radius-md: 8px; --radius-lg: 12px; --radius-xl: 16px; --radius-pill: 999px;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.18); --shadow-md: 0 4px 16px rgba(0,0,0,0.25);
+  --shadow-lg: 0 12px 40px rgba(0,0,0,0.40); --shadow-glow: 0 0 0 1px #18A0FB, 0 0 24px rgba(24,160,251,0.18);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1); --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-fast: 150ms; --dur-base: 250ms; --dur-slow: 400ms;
+}
+:root[data-theme="light"] {
+  --bg-app: #F8FAFC; --bg-surface: #FFFFFF; --bg-surface-2: #F1F5F9; --bg-surface-3: #E2E8F0;
+  --bg-elevated: #FFFFFF; --bg-glass: rgba(255,255,255,0.85);
+  --text-primary: #16181D; --text-secondary: rgba(22,24,29,0.85); --text-muted: rgba(22,24,29,0.70);
+  --text-tertiary: rgba(22,24,29,0.50); --text-dim: rgba(22,24,29,0.30);
+  --border-subtle: rgba(15,23,41,0.06); --border-default: rgba(15,23,41,0.10); --border-strong: rgba(15,23,41,0.20);
+  --shadow-sm: 0 1px 2px rgba(15,23,41,0.06); --shadow-md: 0 4px 16px rgba(15,23,41,0.08);
+  --shadow-lg: 0 12px 40px rgba(15,23,41,0.12);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: var(--font-sans); background: var(--bg-app); color: var(--text-primary);
+  line-height: 1.55; -webkit-font-smoothing: antialiased;
+  font-feature-settings: 'cv02','cv03','cv04','cv11'; padding: var(--space-5);
+}
+body::before {
+  content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 0;
+  background:
+    radial-gradient(ellipse 80% 50% at 20% 0%, rgba(24,160,251,0.08), transparent 60%),
+    radial-gradient(ellipse 60% 40% at 90% 100%, rgba(139,92,246,0.05), transparent 60%);
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+
+/* ── Components ──────────────────────────────────────────────────────────── */
+.wrap { position: relative; z-index: 1; display: grid; gap: var(--space-4); }
+.eyebrow { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px; color: var(--accent); }
+.title { font-size: 24px; font-weight: 700; letter-spacing: -0.4px; }
+.sub { font-size: 12px; color: var(--text-muted); }
+
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: var(--space-3); }
+.kpi {
+  background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-lg);
+  padding: var(--space-4) var(--space-5); cursor: pointer;
+  transition: border-color var(--dur-base) var(--ease-out), box-shadow var(--dur-base) var(--ease-out);
+}
+.kpi:hover, .kpi.is-active { border-color: var(--border-glow); box-shadow: var(--shadow-glow); }
+.kpi-label { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-muted); margin-bottom: var(--space-2); }
+.kpi-value { font-size: 36px; font-weight: 700; letter-spacing: -1px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.kpi-value .unit { font-size: 18px; font-weight: 600; color: var(--text-muted); }
+.kpi-hint { font-size: 12px; color: var(--text-tertiary); margin-top: var(--space-1); }
+
+.row { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: var(--space-3); }
+.card { background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); padding: var(--space-5); }
+.card-title { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px; color: var(--text-muted); margin-bottom: var(--space-4); }
+
+.donut-wrap { display: flex; align-items: center; gap: var(--space-6); flex-wrap: wrap; }
+.donut .center-value { font-size: 36px; font-weight: 700; fill: var(--text-primary); font-variant-numeric: tabular-nums; }
+.donut .center-label { font-size: 12px; font-weight: 600; fill: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.6px; }
+.legend { display: grid; gap: var(--space-2); font-size: 12px; color: var(--text-secondary); }
+.legend span { display: inline-flex; align-items: center; gap: var(--space-2); }
+.legend i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+.legend b { margin-left: auto; padding-left: var(--space-4); font-variant-numeric: tabular-nums; color: var(--text-primary); }
+
+.bars { display: grid; gap: var(--space-3); }
+.bar { display: grid; grid-template-columns: 120px 1fr 40px; align-items: center; gap: var(--space-3); font-size: 12px; }
+.bar-name { color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bar-track { height: 8px; background: var(--bg-surface-2); border-radius: var(--radius-pill); overflow: hidden; }
+.bar-fill { height: 100%; border-radius: var(--radius-pill); transition: width var(--dur-slow) var(--ease-out); }
+.bar-value { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+.toolbar { display: flex; gap: var(--space-2); align-items: center; flex-wrap: wrap; margin-bottom: var(--space-3); }
+.search {
+  height: 32px; min-width: 200px; padding: 0 var(--space-3); font: 500 12px var(--font-sans);
+  color: var(--text-primary); background: var(--bg-app); border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm); outline: none;
+}
+.search:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.search::placeholder { color: var(--text-dim); }
+.count { margin-left: auto; font-size: 12px; color: var(--text-tertiary); }
+
+table { width: 100%; border-collapse: collapse; font-size: 12px; }
+th {
+  text-align: left; font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px; color: var(--text-muted);
+  padding: var(--space-2) var(--space-3); border-bottom: 1px solid var(--border-default); cursor: pointer; white-space: nowrap;
+}
+td { padding: var(--space-3); border-bottom: 1px solid var(--border-subtle); color: var(--text-secondary); }
+tr:hover td { background: var(--bg-surface-2); }
+.mono { font-family: var(--font-mono); }
+.empty { padding: var(--space-8); text-align: center; color: var(--text-tertiary); }
+
+.sev-pill {
+  display: inline-flex; align-items: center; height: 24px; padding: 4px 8px; gap: 4px;
+  border-radius: var(--radius-sm); font: 500 12px/16px 'Roboto', var(--font-sans); color: #16181D; white-space: nowrap;
+}
+.sev-pill::before {
+  content: ''; width: 16px; height: 16px; flex-shrink: 0;
+  background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%2316181D' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'><path d='M4 2.5v11'/><path d='M4 2.5h7.4l-1.6 2.4 1.6 2.4H4z' fill='%2316181D'/></svg>") no-repeat center / contain;
+}
+.sev-pill.critical { background: var(--sev-critical); } .sev-pill.high { background: var(--sev-high); }
+.sev-pill.medium { background: var(--sev-medium); } .sev-pill.low { background: var(--sev-low); }
+.sev-pill.info { background: var(--sev-info); }
+.status { font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+.status.open { color: var(--status-in-progress); } .status.closed { color: var(--status-completed); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div>
+    <div class="eyebrow">Security operations</div>
+    <div class="title">Findings overview</div>
+    <div class="sub">Click a number to filter. Click a column to sort.</div>
+  </div>
+  <div class="kpis" id="kpis"></div>
+  <div class="row">
+    <div class="card"><div class="card-title">By severity</div><div class="donut-wrap" id="donut"></div></div>
+    <div class="card"><div class="card-title">By source</div><div class="bars" id="bars"></div></div>
+  </div>
+  <div class="card">
+    <div class="toolbar">
+      <input class="search" id="search" type="search" placeholder="Search title or id">
+      <span class="count" id="count"></span>
+    </div>
+    <div id="table"></div>
+  </div>
+</div>
+<script>
+// Rows: { id, title, severity: critical|high|medium|low|info, source, status: open|closed, created: YYYY-MM-DD }
+const DATA = __DATA__;
+
+const SEVERITIES = ['critical', 'high', 'medium', 'low', 'info'];
+const state = { filter: null, query: '', sortKey: 'severity', sortDir: 1 };
+
+function esc(value) {
+  return String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+function cssVar(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+function countBy(rows, key) { return rows.reduce((acc, r) => (acc[r[key]] = (acc[r[key]] || 0) + 1, acc), {}); }
+
+const FILTERS = {
+  all: { label: 'Total', hint: 'All findings', test: () => true },
+  critical: { label: 'Critical', hint: 'Severity critical', test: r => r.severity === 'critical' },
+  open: { label: 'Open', hint: 'Not closed yet', test: r => r.status === 'open' },
+};
+
+function rows() {
+  const q = state.query.toLowerCase();
+  const filter = FILTERS[state.filter] || FILTERS.all;
+  return DATA.filter(r => filter.test(r) && (!q || `${r.title} ${r.id}`.toLowerCase().includes(q)))
+    .sort((a, b) => {
+      const k = state.sortKey;
+      const x = k === 'severity' ? SEVERITIES.indexOf(a[k]) : a[k];
+      const y = k === 'severity' ? SEVERITIES.indexOf(b[k]) : b[k];
+      return (x < y ? -1 : x > y ? 1 : 0) * state.sortDir;
+    });
+}
+
+function renderKpis() {
+  const closed = DATA.filter(r => r.status === 'closed').length;
+  const rate = DATA.length ? Math.round((closed / DATA.length) * 100) : 0;
+  const tiles = Object.entries(FILTERS).map(([id, f]) =>
+    `<div class="kpi ${state.filter === id ? 'is-active' : ''}" data-filter="${id}">
+       <div class="kpi-label">${f.label}</div><div class="kpi-value">${DATA.filter(f.test).length}</div>
+       <div class="kpi-hint">${f.hint}</div></div>`);
+  tiles.push(`<div class="kpi"><div class="kpi-label">Closed</div>
+    <div class="kpi-value">${rate}<span class="unit">%</span></div><div class="kpi-hint">${closed} of ${DATA.length}</div></div>`);
+  document.getElementById('kpis').innerHTML = tiles.join('');
+  document.querySelectorAll('[data-filter]').forEach(el => el.onclick = () => {
+    state.filter = state.filter === el.dataset.filter ? null : el.dataset.filter;
+    render();
+  });
+}
+
+function renderDonut() {
+  const counts = countBy(DATA, 'severity');
+  const total = DATA.length || 1;
+  const r = 52, c = 2 * Math.PI * r;
+  let offset = 0;
+  const arcs = SEVERITIES.filter(s => counts[s]).map(s => {
+    const length = (counts[s] / total) * c;
+    const arc = `<circle r="${r}" cx="70" cy="70" fill="none" stroke="${cssVar('--sev-' + s)}" stroke-width="18"
+      stroke-dasharray="${Math.max(length - 2, 0)} ${c}" stroke-dashoffset="${-offset}" transform="rotate(-90 70 70)"/>`;
+    offset += length;
+    return arc;
+  });
+  const legend = SEVERITIES.filter(s => counts[s]).map(s =>
+    `<span><i style="background:var(--sev-${s})"></i>${s[0].toUpperCase() + s.slice(1)}<b>${counts[s]}</b></span>`);
+  document.getElementById('donut').innerHTML =
+    `<svg class="donut" width="140" height="140" viewBox="0 0 140 140" role="img" aria-label="Findings by severity">
+       <circle r="${r}" cx="70" cy="70" fill="none" stroke="${cssVar('--bg-surface-2')}" stroke-width="18"/>${arcs.join('')}
+       <text class="center-value" x="70" y="72" text-anchor="middle">${DATA.length}</text>
+       <text class="center-label" x="70" y="92" text-anchor="middle">Findings</text></svg>
+     <div class="legend">${legend.join('')}</div>`;
+}
+
+function renderBars() {
+  const entries = Object.entries(countBy(DATA, 'source')).sort((a, b) => b[1] - a[1]).slice(0, 8);
+  const max = Math.max(1, ...entries.map(e => e[1]));
+  document.getElementById('bars').innerHTML = entries.map(([name, n], i) =>
+    `<div class="bar"><span class="bar-name" title="${esc(name)}">${esc(name)}</span>
+       <div class="bar-track"><div class="bar-fill" style="width:${(n / max) * 100}%;background:var(--cat-${i + 1})"></div></div>
+       <span class="bar-value">${n}</span></div>`).join('') || '<div class="empty">No data</div>';
+}
+
+function renderTable() {
+  const list = rows();
+  const columns = [['id', 'Id'], ['title', 'Title'], ['severity', 'Severity'], ['source', 'Source'], ['status', 'Status'], ['created', 'Created']];
+  const head = columns.map(([k, label]) =>
+    `<th data-sort="${k}">${label}${state.sortKey === k ? (state.sortDir > 0 ? ' ▲' : ' ▼') : ''}</th>`).join('');
+  const body = list.map(r => `<tr>
+      <td class="mono">${esc(r.id)}</td><td>${esc(r.title)}</td>
+      <td><span class="sev-pill ${esc(r.severity)}">${esc(r.severity[0].toUpperCase() + r.severity.slice(1))}</span></td>
+      <td>${esc(r.source)}</td><td class="status ${esc(r.status)}">${esc(r.status)}</td><td class="mono">${esc(r.created)}</td></tr>`).join('');
+  document.getElementById('table').innerHTML = list.length
+    ? `<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`
+    : '<div class="empty">No findings match.</div>';
+  document.getElementById('count').textContent = `${list.length} of ${DATA.length}`;
+  document.querySelectorAll('[data-sort]').forEach(th => th.onclick = () => {
+    state.sortDir = state.sortKey === th.dataset.sort ? -state.sortDir : 1;
+    state.sortKey = th.dataset.sort;
+    renderTable();
+  });
+}
+
+function render() { renderKpis(); renderDonut(); renderBars(); renderTable(); }
+
+document.getElementById('search').addEventListener('input', e => { state.query = e.target.value; renderTable(); });
+render();
+// Tell Blink the page is drawn (PDF export waits for this). Keep it after the last render.
+window.addEventListener('load', () => parent.postMessage('html-widget:ready', '*'));
+</script>
+</body>
+</html>

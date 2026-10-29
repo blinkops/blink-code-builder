@@ -76,14 +76,16 @@ workflow (read/write rows from inside a workflow step).
 
 ### Dashboards
 
-`workspace/dashboards/dashboards-list.yaml` lists every dashboard in the workspace with a short
-summary of its widgets (id, kind, name, table_name) and whether it's published to the Portal.
-Like the tables schema, it costs one call per dashboard, so the `SessionStart` hook leaves it
-alone: it's written on demand by `list_dashboards`, and after `save_dashboard`/`publish_dashboard`.
+`workspace/dashboards/dashboards-list.tsv` lists every dashboard in the workspace — id, display
+name, whether it's published to the Portal, and categories. It's written from
+`get_workspace_resources`, together with the workflow and agent lists. After a save that creates a
+dashboard, and after any publish, a `Stop` hook doesn't let you end the turn until you call
+`get_workspace_resources` with `include_tables=false`.
 
 Each dashboard that's been fetched or saved has its own YAML file at
-`workspace/dashboards/<name>.yaml`, written by `fetch_dashboard` and saved with
-`save_dashboard`. A dashboard has no draft: a save is live at once. The plugin never deletes a
+`workspace/dashboards/<name>.yaml`: the `save_fetched.py` hook writes it after `fetch_dashboard`
+and again after `save_dashboard` (with the new widget ids). Save it back by passing the file's
+content to `save_dashboard`. A dashboard has no draft: a save is live at once. The plugin never deletes a
 dashboard or a widget. `publish_dashboard` always makes Claude Code ask the user first (a
 `PreToolUse` hook). See the **managing-dashboards** skill.
 
@@ -100,6 +102,22 @@ The Blink server does what it is asked; approvals are this plugin's job (`hooks/
   save time and, for publish, whether the saved draft passed a test run.
 
 Before such a call, tell the user in plain words what will happen. If they decline, don't retry.
+
+## Links to Blink
+
+Give the user a clickable link to each Blink object you create, change, publish or run.
+
+- **Workflows, agents and dashboards:** the tools return `editor_url`. Copy it exactly.
+- **Everything else:** build the link from the Blink URL and workspace id that the session-start
+  hook gave you. Use only these patterns:
+
+| Object | Link |
+|---|---|
+| Workflow test run | `<workflow editor_url>?execution=<execution_id>` |
+| Table | `<Blink URL>/workspace/<workspace id>/tables/<table id>` (the `id` in `tables-schema.yaml`) |
+| Dashboard in the Portal | `<Blink URL>/portal/app/<dashboard id>` |
+
+Don't build a link for any other object, and don't guess a path.
 
 ## Search scope
 

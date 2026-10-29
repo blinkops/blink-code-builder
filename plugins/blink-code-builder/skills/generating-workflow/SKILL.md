@@ -42,7 +42,7 @@ Every `mcp__blink-code-builder__*` tool takes a `workspace_id` — use the id th
 
    **Batch the lookups, don't chain them.** Independent calls — meaning calls whose inputs don't depend on each other's output — must go in a single tool round-trip. Two concrete batches in this step:
 
-   - **Round 1 (parallel):** all the greps (`actions.tsv`, `triggers.tsv`, `workspace/workflows/` for existing connections) plus reading any reference docs you'll need (`triggers.md`, `expressions.md`, `looking-up-actions.md`, `yaml-formatting.md`, `safety.md`). None of these depend on each other — issue them as one set of parallel tool calls.
+   - **Round 1 (parallel):** all the greps (`actions.tsv`, `triggers.tsv`, `workspace/workflows/` for existing connections) plus reading any reference docs you'll need (`triggers.md`, `expressions.md`, `looking-up-actions.md`, `yaml-formatting.md`, `engine-validation.md`, `safety.md`). None of these depend on each other — issue them as one set of parallel tool calls.
    - **Round 2 (single Bash call):** once you know which JSON files to read, fetch them all in one `tail -n +1 file1 file2 file3` call. Do **not** issue separate `cat`/`Read` per file. See [reference/looking-up-actions.md](reference/looking-up-actions.md) step 3.
    - **Round 3 (conditional — autofill resolution):** after reading action JSONs, identify any `field_type: 2` params where the user named a specific value. For each, call the `fetch_options` tool with `fetcher_name`, `search: "<user-term>"`, and optionally `inputs`/`connections` to resolve the human-readable label to the actual `value` the action expects. **Pass `connections` whenever the action has `connection_types`** — fetchers that call vendor APIs (Azure, GitHub, Jira, etc.) fail without it. It returns a list of `{value, label}` options: one whose `label` matches the user's term exactly → use its `value`; only partial matches → show the candidates to the user and ask them to confirm; an empty list → retry with a shorter term, then use WebSearch for public identifiers, or ask the user a targeted question for private/internal ones. See [reference/looking-up-actions.md](reference/looking-up-actions.md) — Autofill section. **Skip this round entirely if no autofill params need resolving.**
 
@@ -57,15 +57,15 @@ Every `mcp__blink-code-builder__*` tool takes a `workspace_id` — use the id th
      value: BLK
    ```
    If resolution failed because no playbooks exist yet, leave the param empty and call it out in the step 8 handoff note.
-5. **Self-check.** Run the draft through the pre-save checklist in [reference/validation.md](reference/validation.md) — YAML gotchas, action names verbatim from the catalog, required inputs, enum values, step-id references, inline Python syntax, and **connection keys that are one of the action's `connection_types`** (a wrong/transposed integration slug on a step's `connections:` saves fine even when the action `full_name` is correct, and never binds). If the catalog is missing, call `export_catalog` once; if that fails, stop and route the user through `setup-blink-plugin` — unless this is a **code-only revision** (no new actions), which can go ahead without it.
+5. **Self-check.** Run the draft through the pre-save checklist in [reference/validation.md](reference/validation.md) — YAML gotchas, action names verbatim from the catalog, required inputs, enum values, step-id references, inline Python syntax, and **connection keys that are one of the action's `connection_types`** (a wrong/transposed integration slug on a step's `connections:` saves fine even when the action `full_name` is correct, and never binds). Then check it against the workflow engine's compile rules in [reference/engine-validation.md](reference/engine-validation.md) — required `name`/`automation_type`, trigger rules, condition shape, flow-control limits, step options, required inputs of engine-implemented actions. **The save does not run the engine's compile**: a draft that breaks one of those rules saves fine and then fails its first run with `Workflow <id>: <message>`. If the catalog is missing, call `export_catalog` once; if that fails, stop and route the user through `setup-blink-plugin` — unless this is a **code-only revision** (no new actions), which can go ahead without it.
 6. **Save** as a draft: Read `/tmp/<name>.yaml` and call the `save_automation` tool with its content as `yaml`. To update an existing automation pass its `automation_id`; an empty `automation_id` **creates a new one**. So before a first save, grep `workspace/workflows/workflows-list.tsv` for the `name:` — if a row matches, it's the same automation: pass that row's `id` (or ask, if it may be a different workflow with the same name). Optionally pass `pack_id` to create it in a specific pack. Two ways a save fails:
    - **The plugin refuses the call** naming actions that aren't in the local catalog (likely typos) → look them up, fix, re-call.
    - **A tool error with the controller's message** (invalid YAML) → fix every reported problem in one pass, re-save.
 
-   Cap at 3 tries, then stop and show the user the last errors. If the call fails with a missing-config or sign-in error, **stop and route the user through the `setup-blink-plugin` skill** — don't try to source `.env` files or guess values. On success the tool returns `{automation_id}` — keep it for every later call, and give it to the user. **Don't echo the YAML body**; the user reviews via `git diff`.
+   Cap at 3 tries, then stop and show the user the last errors. If the call fails with a missing-config or sign-in error, **stop and route the user through the `setup-blink-plugin` skill** — don't try to source `.env` files or guess values. On success the tool returns `{automation_id, editor_url}` — keep the id for every later call, and give the user the `editor_url` as a clickable link. **Don't echo the YAML body**; the user reviews via `git diff`.
 7. **Promote** the saved YAML to the user's `workspace/workflows/` directory (create if missing). One file per automation.
 8. **Run the test, or hand off to the user.** First check test-run readiness (see [reference/validation.md](reference/validation.md)):
-   - **Ready** — every step that needs a connection has one, required action inputs are filled, and required playbook `inputs` have defaults. Tell the user in plain words what the run will do and what it touches (a test run is **not a dry run** — every step executes for real; see [reference/safety.md](reference/safety.md)), then call the `trigger_test_run` tool with `automation_id`. It runs the **saved** draft. Claude Code asks the user to approve first, listing the risks the plugin found; if the user declines, don't retry — ask what they want instead. The tool returns `{execution_id, state, step_results}` and waits up to ~90 s. `state` = `Completed` with no step errors → one-line success note, done. `Failed`/`Cancelled`/`Timeout`/`Skipped`/`Paused` → step 9. Any other state means it is still running → wait, then step 9.
+   - **Ready** — every step that needs a connection has one, required action inputs are filled, and required playbook `inputs` have defaults. Tell the user in plain words what the run will do and what it touches (a test run is **not a dry run** — every step executes for real; see [reference/safety.md](reference/safety.md)), then call the `trigger_test_run` tool with `automation_id`. It runs the **saved** draft. Claude Code asks the user to approve first, listing the risks the plugin found; if the user declines, don't retry — ask what they want instead. The tool returns `{execution_id, state, step_results}` and waits up to ~90 s. `state` = `Completed` with no step errors → one-line success note with the run link (see **Links to Blink** in the plugin's CLAUDE.md), done. `Failed`/`Cancelled`/`Timeout`/`Skipped`/`Paused` → step 9. Any other state means it is still running → wait, then step 9.
    - **Waits for a person** (`internal.Sleep` with `Mode: Web Form Response`, or `wait_for_response: true`) — an automatic test run either parks for hours or silently skips the wait, so don't call `trigger_test_run`. **Don't offer to change the YAML** — hand off: tell the user why the automatic run is skipped, and ask them to open the workflow in the Blink editor, click Test Run, and answer the form themselves. Once they confirm it finished → step 9 (ask them for the run's execution id).
    - **Missing connections** — List the steps and the connection type(s) each one needs and ask which existing connections to use (see **Connections**). Patch the YAML, re-save (step 6), re-run this step. If they'd rather bind them in the UI, ask them to click **Test Run** themselves; once they confirm the run finished → step 9.
    - **Empty required action inputs** — For each: if the value is obvious from the user's original prompt, patch the YAML; otherwise ask the user. Re-save (step 6) and re-run this step.
@@ -73,6 +73,7 @@ Every `mcp__blink-code-builder__*` tool takes a `workspace_id` — use the id th
 9. **Fetch the run log when needed.** Run only if step 8 didn't already confirm success — i.e. the run wasn't `Completed`, was still running, or the user triggered the test themselves. Call the `get_run_log` tool with the `execution_id` and report:
    - If `state` = `Completed` and no step has an `error` → one-sentence success note.
    - If any step failed → name the step (`step_id`), its action, and the `error` (plus `error_details`). Ask the user whether to patch the YAML (→ Revising flow below) or leave it as-is.
+   - If the run failed before any step ran with `Workflow <id>: <message>` → the engine rejected the YAML at compile. Find the message in [reference/engine-validation.md](reference/engine-validation.md), fix every violation in one pass, re-save (step 6), and re-run step 8. If `<id>` is a subflow's id, the subflow's YAML is the one to fix.
    - If it's still running → tell the user and check again shortly.
 10. **Offer to publish — only after a successful test.** The draft is what the editor shows; the **published** version is what scheduled/triggered/production runs execute. Never publish on your own initiative — only when the user asks in this conversation — and only after steps 8–9 confirmed a successful run of the **current saved draft** (re-saving after the test means it must be tested again). When the test succeeded, offer it once, together with a short plain-language summary the user can approve at a glance:
     - **When it runs:** the trigger — cron schedule, event type, or "manual only" (`on_demand`).
@@ -80,7 +81,7 @@ Every `mcp__blink-code-builder__*` tool takes a `workspace_id` — use the id th
     - **Blast radius, always and prominently:** describe each high-risk step (destructive actions, messaging in loops, broadcast mentions) in plain language — who/what is affected and roughly how many — **even if the user already approved them for the test run**. A test approval covers one supervised run; publishing means these steps fire on every future trigger. See [reference/safety.md](reference/safety.md) — Publishing section.
 
     Then branch on the user's answer:
-    - **User says yes** → call the `publish_automation` tool with `automation_id`. Claude Code asks the user to approve, showing the risks and whether the saved YAML passed a test. A successful call returns nothing — report that it's published. Done.
+    - **User says yes** → call the `publish_automation` tool with `automation_id`. Claude Code asks the user to approve, showing the risks and whether the saved YAML passed a test. It returns `{automation_id, editor_url}` — report that it's published, with the link. Done.
     - **User says no, or declines the approval prompt** → stop; the draft stays saved, nothing goes live. Don't retry — ask what they want instead.
     - **No passed test of the current draft** → tell the user which case it is (never tested, or edited after the test) and offer to run the test first (→ step 8). Publish untested only if the user, **after hearing that warning, explicitly accepts it**.
 
@@ -99,29 +100,32 @@ Then:
 
 ## YAML shape
 
-Only `workflow` is strictly required; everything else has sensible defaults.
+`workflow`, `name`, and `automation_type` are required — the engine refuses to run a workflow without them.
 
 | Key               | Required | Notes                                                                     |
 |-------------------|----------|---------------------------------------------------------------------------|
 | `workflow`        | yes      | List containing **exactly one** section, with `section:` name (`Steps`) and `steps:` list. See Guidelines below. |
-| `name`            | no       | Human-readable. Set it — the UI uses it.                                  |
-| `automation_type` | no       | `on_demand` (default), `scheduled`, or `event`.                           |
+| `name`            | yes      | Human-readable, non-empty. Missing → `schema should have a name`.         |
+| `automation_type` | yes      | `on_demand`, `scheduled`, or `event`. Write it even for `on_demand` — missing → `automation type is required`. |
 | `desc`            | no       | Purpose blurb.                                                            |
-| `inputs`          | no       | Map of automation-level inputs (see below).                               |
-| `outputs`         | no       | Map of values returned when the automation completes.                     |
-| `triggers`        | no       | Required for `scheduled` and `event`. See [reference/triggers.md](reference/triggers.md). |
+| `inputs`          | no       | Map of automation-level inputs (see below). Each needs a `type`.          |
+| `outputs`         | no       | Map of values returned when the automation completes. No empty keys or values. |
+| `triggers`        | no       | Required for `scheduled` and `event`. **At most one trigger in total.** See [reference/triggers.md](reference/triggers.md). |
 | `runner`          | no       | Execution environment, e.g. `blink_cloud`.                                |
 
 ### Step
 
 | Key          | Required | Notes                                                                       |
 |--------------|----------|-----------------------------------------------------------------------------|
-| `id`         | yes      | Unique within the flattened workflow. Use `S1`, `S2`, ... sequential.       |
+| `id`         | yes      | On **every** step, including children of branches, loops, try/catch, and switch. Unique within the flattened workflow. Format `S<integer>` — capital `S`, then a number with no leading zeros. See guideline 1. |
 | `action`     | yes      | Exact `full_name` from the catalog. Never invent.                          |
 | `name`       | no       | Descriptive per step.                                                      |
-| `inputs`     | no       | Key-value map; keys match the action's parameter names.                    |
-| `connections`| no       | Map of `<type>: <connection-name>` (plural). Required for most vendor actions. The singular `connection: <name>` is silently dropped at runtime — always use the plural map. |
+| `inputs`     | no       | Key-value map; keys match the action's parameter names. Engine-implemented actions (`internal.*`, `core.python*`, `core.email*`, `agents.*`, …) have required inputs — see [reference/engine-validation.md](reference/engine-validation.md). |
+| `connections`| no       | Map of `<type>: <connection-name>` (plural). Required for most vendor actions. Every value must be non-empty — with no connection yet, omit the key. The singular `connection: <name>` is silently dropped at runtime — always use the plural map. |
+| `when`       | no       | Only `true` or `false` — disables a step; not a runtime condition (use `internal.ifCondition`). An expression here silently disables the step, or fails the run inside a flow-control step. |
 | `steps`      | no       | Nested `steps:` list — used by flow-control actions (`internal.for`, `internal.ifCondition`, `internal.ifTrueBranch`, etc.). |
+
+`continue_on_error: true` is rejected on flow-control steps (loop, if and its branches, try, catch, switch and its branches). The full rule list is in [reference/engine-validation.md](reference/engine-validation.md).
 
 ## Connections
 
@@ -131,7 +135,7 @@ Only `workflow` is strictly required; everything else has sensible defaults.
 2. **Pick by type.** Filter the list to the connection type the step needs (e.g. `slack` for `slack.send_message`):
    - Exactly one match → use it.
    - Multiple matches → if one of them already appears in another `workflows/*.yaml` (grep `workspace/workflows/` to check), prefer it and tell the user you reused it and where from. Otherwise ask the user which to bind.
-   - No match → leave blank and call it out at handoff.
+   - No match → omit the step's `connections:` key entirely and call it out at handoff. Never write an empty value (`slack: ""`) — the engine rejects it with `connection value is required`.
 3. **If the user volunteers a connection** (in the original prompt or in response), use that name verbatim — even if it isn't in the `get_workspace_resources` output (the workspace may have been updated since). Put it in the YAML and re-run save (step 6 of the Flow) **before moving forward** to test run. Don't leave the connection name parked in chat.
 
 ## Subflows — calling another workflow
@@ -146,7 +150,7 @@ See the `subflows` skill for the full lifecycle (create, publish, call, reuse). 
 
 See the `generating-agent` skill for the full lifecycle (configure, save, publish, connect). Short version:
 
-- **Calling one as a step:** take the `id` column of a `published`/`modified` row in `workspace/agents/agents-list.tsv` (in the repo, regenerate with `get_workspace_resources` if it looks stale) and write `agents.<id>` (never call by name). Required input `task:` (plain-language goal), optional `output_schema:` for structured output; the result is at `{{ steps.<id>.output.agent_output }}`.
+- **Calling one as a step:** take the `id` column of a `published`/`modified` row in `workspace/agents/agents-list.tsv` (in the repo, regenerate with `get_workspace_resources` if it looks stale) and write `agents.<id>` (never call by name). Required input `task:` (plain-language goal), optional `output_schema:` for structured output (must be valid JSON); the result is at `{{ steps.<id>.output.agent_output }}`.
 - **A workflow as an agent's ability:** an agent can only run **published, active, on-demand** workflows of this workspace — the same rows in `workspace/workflows/workflows-list.tsv`. Publish the workflow before attaching it.
 - **Ordering when the user wants both:** publish the callee first. Workflow-is-an-ability → workflow first; agent-is-a-step → agent first.
 - **"Give the agent the ability to do X with a vendor"** means author a small on-demand workflow that does X, publish it, then attach it — abilities are workflows only, never vendor actions.
@@ -182,14 +186,16 @@ Never write ad-hoc code for something an existing script already does. Rebuildin
 
 ## Guidelines
 
-1. Sequential step IDs (`S1`, `S2`, ...). Unique across the flattened workflow, including inside `if`/`for` branches.
+1. **Step ids are `S<integer>`** — a capital `S` followed by an integer (`S1`, `S2`, `S17`). Not `s1`, `S01`, `step1`, `S1a`, or a descriptive name. Start at `S1` and go up by 1 for each step. Every new step gets the current highest id + 1 — also when editing an existing workflow or inserting a step in the middle, so ids aren't always in file order. Never renumber existing steps; `{{ steps.<id> }}` and `context.steps.<id>` references point at them. Ids are unique across the flattened workflow, including inside `if`/`for`/`try`/switch children.
 2. Descriptive `name` on every step.
 3. **Exactly one section per automation, named `Steps`.** Never emit more than one entry under `workflow:` — the Blink editor UI rejects saves with more than one section (you'd have to manually delete the extras before it saves). Blink's own server-side automation generator emits this same shape — a single `- section: Steps` entry, never more. Don't split multi-phase work ("Parse CSV", "Resolve Conflicts", "Done", etc.) into separate sections — those are just steps (and flow-control actions like `internal.ifCondition`/`internal.for`) inside the single `Steps` section.
 4. Action `full_name` always verbatim from the catalog.
 5. `connections: { <type>: <name> }` (plural) on every vendor action — see the **Connections** section below. Never use the singular `connection: <name>`; the runtime drops it.
-6. Default to `on_demand` unless the prompt specifies a schedule or event.
+6. Default to `on_demand` unless the prompt specifies a schedule or event — and always write `automation_type:` and `name:` explicitly; the engine won't run a workflow missing either.
 7. Run the pre-save checklist and get a successful save before claiming done.
 8. Never embed secrets in YAML — reference existing connections by name.
 9. **Draft small by default — minimize blast radius.** Default recipients to the requesting user or a test channel (not a team channel) unless the user named the audience; put a `LIMIT` on any query that feeds a loop for the first test run; never add `@here`/`@channel` or target "all users" on your own initiative. See [reference/safety.md](reference/safety.md) — a test run executes every step for real.
 10. **Prefer specific actions over flexible code-execution actions.** Reach for `core.pythonV2`, `core.bash`, `core.container`, etc. only when no domain-specific action covers the task. Before falling back, search the catalog by service prefix as well as keyword (e.g. `Grep pattern="^array\." path="${CLAUDE_PLUGIN_DATA}/catalog/actions.tsv"`) — capability-named services like `array.*`, `utility.*`, `http.*` often have the right primitive (`array.ArraySort`, `array.GetArrayItem`, `array.ArrayFilter`, `utility.Convert*`, etc.). A one-line Python lambda fed to a domain action's `key:`/`filterFunction:` parameter is fine; a wholesale `core.pythonV2` step replicating that domain action is not.
 The same rule applies to the expression language: when work can be done as an `{{ … }}` expression — date math (`add`, `sub`), string ops (`split`, `replace`), field extraction, list-shape checks (`empty`) — wrap it in `internal.SetVariables` rather than a `core.pythonV2` step. See [reference/expressions.md](reference/expressions.md).
+11. **In a Python step, never write bare `context.steps`** — always `context.steps.<id>.…`, even in comments — **and never assign `context.variables`**. Print the values as a JSON map and set them in an `internal.SetVariables` step after it. See [reference/expressions.md](reference/expressions.md) — Python and Bash steps.
+12. **In conditions, compare like with like** — boolean to boolean (`Is true`/`Is false`), number to number, string to string. See [reference/expressions.md](reference/expressions.md) — Conditions.

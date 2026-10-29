@@ -33,7 +33,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "echo '{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"permissionDecision\": \"ask\", \"permissionDecisionReason\": \"Publishing shares this dashboard and its data, including the rows behind each chart, with the people you named.\"}}'"
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/publish_gate.py\""
           }
         ]
       },
@@ -58,7 +58,7 @@
         ]
       },
       {
-        "matcher": "mcp__blink-code-builder__(fetch_automation|fetch_agent)",
+        "matcher": "mcp__blink-code-builder__(fetch_automation|fetch_agent|fetch_dashboard|save_dashboard)",
         "hooks": [
           {
             "type": "command",
@@ -85,7 +85,7 @@
         ]
       },
       {
-        "matcher": "mcp__blink-code-builder__(publish_automation|publish_agent)",
+        "matcher": "mcp__blink-code-builder__(publish_automation|publish_agent|publish_dashboard)",
         "hooks": [
           {
             "type": "command",
@@ -100,6 +100,16 @@
           {
             "type": "command",
             "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/check_setup.py\""
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/refresh_workspace.py\" --stop"
           }
         ]
       }

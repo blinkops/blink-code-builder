@@ -9,6 +9,7 @@ top of the file.
 """
 
 import json
+import os
 import re
 import sys
 from pathlib import Path
@@ -66,3 +67,63 @@ def tool_result(tool_response):
     if not isinstance(result, dict):
         raise ValueError(f"unexpected tool output: {str(result)[:200]!r}")
     return result
+
+
+def to_yaml(value, indent=0):
+    """Block YAML without PyYAML. Strings are JSON-quoted, which YAML reads as-is."""
+    pad = " " * indent
+    if isinstance(value, dict):
+        if not value:
+            return "{}"
+        lines = []
+        for key, item in value.items():
+            if isinstance(item, (dict, list)) and item:
+                lines.append(f"{pad}{key}:\n{to_yaml(item, indent + 2)}")
+            else:
+                lines.append(f"{pad}{key}: {to_yaml(item)}")
+        return "\n".join(lines)
+    if isinstance(value, list):
+        if not value:
+            return "[]"
+        lines = []
+        for item in value:
+            if isinstance(item, (dict, list)) and item:
+                body = to_yaml(item, indent + 2)
+                lines.append(f"{pad}- {body[indent + 2:]}")
+            else:
+                lines.append(f"{pad}- {to_yaml(item)}")
+        return "\n".join(lines)
+    if value is None:
+        return "null"
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, (int, float)):
+        return str(value)
+    return json.dumps(value, ensure_ascii=False)
+
+
+def _refresh_marker(session_id):
+    """The marker that says this session must refresh the workspace lists, or None outside
+    Claude Code. It lives in the plugin data dir, not in the user's repo."""
+    data = os.environ.get("CLAUDE_PLUGIN_DATA")
+    if not data or not session_id:
+        return None
+    return Path(data) / "refresh-needed" / session_id
+
+
+def mark_refresh_needed(session_id):
+    marker = _refresh_marker(session_id)
+    if marker:
+        marker.parent.mkdir(parents=True, exist_ok=True)
+        marker.touch()
+
+
+def clear_refresh_needed(session_id):
+    marker = _refresh_marker(session_id)
+    if marker:
+        marker.unlink(missing_ok=True)
+
+
+def refresh_needed(session_id):
+    marker = _refresh_marker(session_id)
+    return bool(marker and marker.exists())

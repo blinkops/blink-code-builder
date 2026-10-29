@@ -38,7 +38,9 @@ Catalog JSON says `Variables` is required, with no description or options. Actua
 Rules:
 
 - Keys are `Name`, `Type`, `Value` — capitalized. Lowercase `name`/`value` get silently dropped (controller stores empty entries).
-- `Type` is a required enum. Confirmed values: `Number`, `String`, `List`. Lowercase (`number`, `string`) raises `SetVariableInvalidTypeErr`. Likely valid: `Boolean`, `Object`, `Array` (untested — confirm before relying on them).
+- `Variables` must have at least one entry (`variables is required`).
+- `Name` must match `^[a-zA-Z][a-zA-Z0-9_]*$` — letters, digits, underscores, starting with a letter.
+- `Type` is a required enum: exactly `String`, `Number`, `Boolean`, or `List`. Anything else — lowercase `number`, or `Object`/`Array` — fails with `variable type is invalid`.
 - `Type: Number` is what makes `internal.ifCondition`'s `Greater than` op compare numerically. With `Type: String` (or empty) it compares lexicographically — `"3422000" > "1417492000"` is true.
 
 Reference set variables downstream as `{{ variables.<Name> }}` (lowercase prefix, original-case Name).
@@ -84,7 +86,7 @@ web_form_inputs:
     options: [largest_population, longest_official_name]
 ```
 
-A list here (`web_form_inputs: [{name: question, ...}]`) is silently mishandled — check this by hand before saving.
+A list here (`web_form_inputs: [{name: question, ...}]`) is silently mishandled — check this by hand before saving. An empty dict fails the run (`web form inputs cannot be empty`).
 
 ## Web form flow — step-based (ask, then continue)
 
@@ -122,6 +124,7 @@ workflow:
         name: Wait for Web Form Response
         inputs:
           Mode: Web Form Response
+          WebFormTimeoutDuration: "24"
           WebFormTimeoutUnit: Hours
       - action: internal.print
         id: S4
@@ -133,6 +136,8 @@ workflow:
 Rules:
 
 - Order matters: create form → share the URL → `internal.Sleep` with `Mode: Web Form Response` → read the answer.
+- The form step needs `web_form_flow` set to `Single Step`, `New Interactive`, or `Existing Interactive`, plus a non-empty `access_control`, `header`, and `web_form_inputs`.
+- The `Sleep` step needs `WebFormTimeoutUnit` as `Seconds`, `Minutes`, or `Hours`, and a `WebFormTimeoutDuration` > 0.
 - The answer only exists after submission, under `steps.<form_step_id>.output.response.<input_name>`. Before that, `output` only holds the form URL.
 - Each key inside `web_form_inputs` is one form field; its nested `name` must match that key.
 

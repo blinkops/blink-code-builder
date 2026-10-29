@@ -122,8 +122,8 @@ saved/published elsewhere), call `get_workspace_resources` again before telling 
    - they meant to edit that agent → follow **Editing an agent** (fetch it, save with its `agent_id`);
    - they wanted a separate agent → change `name:` in the YAML.
 6. **`save_agent`** with `yaml` = the file's content (Read it) and no `agent_id` — that creates
-   the agent. It returns `{agent_id}`: report that id and keep it, every later save and publish
-   of this agent takes it. Don't echo the YAML; the user reviews with `git diff`.
+   the agent. It returns `{agent_id, editor_url}`: give the user the `editor_url` as a clickable
+   link, and keep the id — every later save and publish of this agent takes it. Don't echo the YAML; the user reviews with `git diff`.
 
    If it fails because abilities "are not runnable", those ids aren't published, active,
    on-demand workflows of this workspace — see **Edge cases**. Fix and re-save.
