@@ -33,7 +33,7 @@ Walk the user through reaching the menu:
 Then guide them field-by-field. If they already gave you values in their original message (e.g. their Blink URL), tell them what to type in the field — don't re-ask. They paste / type each value into the menu themselves; nothing goes through chat.
 
 - **Blink URL** — Their Blink domain (whatever URL they sign in at, e.g. `https://acme.app.blinkops.com`). It picks the Blink MCP server for their environment and names their tenant, so it must be their own tenant's URL.
-- **Blink workspace ID** — Visible in their browser URL inside Blink: in `https://<blink>/workspaces/<uuid>/...` the UUID after `/workspaces/` is the workspace ID. Tell them to copy that UUID into the field.
+- **Blink workspace ID** — Visible in their browser URL inside Blink: in `https://<blink>/workspace/<uuid>/...` the UUID after `/workspace/` is the workspace ID. Tell them to copy that UUID into the field.
 
 Claude Code does **not** re-prompt for missing required values automatically. If they skipped any at install time, this same `/plugin → Installed → Configure options` flow is how they fix it.
 

@@ -32,7 +32,7 @@ Don't split just because a workflow is long, or for speculative reuse with no co
 Author it like any other automation (see the `generating-workflow` skill), with `automation_type: on_demand`. A workflow that was never published is **not callable at all**, and a parent calls the **published** version by default — so publish before wiring it into a parent (see "Which version does the parent actually call?" below). Run the subflow through its full loop **before** the parent references it:
 
 1. Draft the subflow (resolve its connections as usual) and run the pre-save checklist.
-2. `save_automation` — pass the YAML text as `yaml`; it returns the `automation_id`.
+2. `save_automation` — pass the YAML text as `yaml`; it returns the `automation_id` and the `editor_url`.
 3. `trigger_test_run` + `get_run_log` — test it on its own.
 4. `publish_automation` — publishing also activates it; this is what makes it callable. Same rules as any publish: the user asked for it, you told them what goes live, and they approve Claude Code's prompt.
 

@@ -1,14 +1,17 @@
 #!/usr/bin/env python3
 """Refresh the workspace snapshot through the remote Blink MCP server.
 
-The snapshot is connections.tsv, workflows-list.tsv and agents-list.tsv under the project's
-workspace/ folder. A hook can't call an MCP tool, so this runs in two modes:
+The snapshot is connections.tsv, workflows-list.tsv, agents-list.tsv and dashboards-list.tsv
+under the project's workspace/ folder. A hook can't call an MCP tool, so this runs in two modes:
 
-- SessionStart, and PostToolUse after publish_automation / publish_agent (no args): asks
+- SessionStart, and PostToolUse after publish_automation / publish_agent / publish_dashboard
+  (no args): asks
   Claude to call the remote tool `get_workspace_resources`, and gives it the workspace id.
 - PostToolUse on `get_workspace_resources` (`--save`): the tool returns objects; this writes
   them as the TSV lists and the tables YAML, and replaces the tool output Claude sees with a
   one-line status.
+- Stop (`--stop`): after a publish, or a save that created a dashboard, Claude can't end its
+  turn until it calls `get_workspace_resources` (a per-session marker, cleared by `--save`).
 
 Tables are included: the server reads them, one request per table.
 
@@ -20,14 +23,17 @@ import os
 import sys
 from pathlib import Path
 
-from _common import MCP_NOT_READY_NOTE, clean_for_tsv, tool_result  # also puts the plugin root on sys.path for blink_shared
-from blink_shared.config import ENV_WORKSPACE
+from _common import (MCP_NOT_READY_NOTE, clean_for_tsv, clear_refresh_needed, mark_refresh_needed,
+                     refresh_needed, to_yaml, tool_result)  # also puts the plugin root on sys.path for blink_shared
+from blink_shared.config import ENV_CONTROLLER, ENV_WORKSPACE
+from register_mcp import blink_host
 
 # Result key -> path under the project, the paths the skills read.
 FILES = {
     "workflows": "workspace/workflows/workflows-list.tsv",
     "agents": "workspace/agents/agents-list.tsv",
     "connections": "workspace/connections/connections.tsv",
+    "dashboards": "workspace/dashboards/dashboards-list.tsv",
     "tables": "workspace/tables/tables-schema.yaml",
 }
 
@@ -41,39 +47,6 @@ def tsv(header, rows, note=None):
     return "\n".join(lines)
 
 
-def to_yaml(value, indent=0):
-    """Block YAML without PyYAML. Strings are JSON-quoted, which YAML reads as-is."""
-    pad = " " * indent
-    if isinstance(value, dict):
-        if not value:
-            return "{}"
-        lines = []
-        for key, item in value.items():
-            if isinstance(item, (dict, list)) and item:
-                lines.append(f"{pad}{key}:\n{to_yaml(item, indent + 2)}")
-            else:
-                lines.append(f"{pad}{key}: {to_yaml(item)}")
-        return "\n".join(lines)
-    if isinstance(value, list):
-        if not value:
-            return "[]"
-        lines = []
-        for item in value:
-            if isinstance(item, (dict, list)) and item:
-                body = to_yaml(item, indent + 2)
-                lines.append(f"{pad}- {body[indent + 2:]}")
-            else:
-                lines.append(f"{pad}- {to_yaml(item)}")
-        return "\n".join(lines)
-    if value is None:
-        return "null"
-    if isinstance(value, bool):
-        return "true" if value else "false"
-    if isinstance(value, (int, float)):
-        return str(value)
-    return json.dumps(value, ensure_ascii=False)
-
-
 def render(result):
     """{relative path key: file text} from the tool's objects. Tables only when included."""
     files = {
@@ -85,6 +58,9 @@ def render(result):
                        for a in result["agents"]], STATE_NOTE),
         "connections": tsv("# name\ttype_name",
                            [[c["name"], c["type_name"]] for c in result["connections"]]),
+        "dashboards": tsv("# id\tdisplay_name\tpublished_to_portal\tcategories",
+                          [[d["id"], d["display_name"], "true" if d["is_portal"] else "false",
+                            ",".join(d["categories"])] for d in result["dashboards"]]),
     }
     if result.get("tables") is not None:
         tables = sorted(result["tables"], key=lambda table: table["table"])
@@ -94,6 +70,7 @@ def render(result):
 
 def save():
     payload = json.load(sys.stdin)
+    clear_refresh_needed(payload.get("session_id"))
     project = Path(os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd())
     try:
         result = tool_result(payload.get("tool_response"))
@@ -115,21 +92,48 @@ def save():
                       "hookSpecificOutput": {"hookEventName": "PostToolUse", "updatedToolOutput": status}}))
 
 
+def stop():
+    payload = json.load(sys.stdin)
+    session_id = payload.get("session_id")
+    if not refresh_needed(session_id):
+        return
+    if payload.get("stop_hook_active"):
+        # Already blocked once and still not refreshed (the server may be down): let Claude stop.
+        clear_refresh_needed(session_id)
+        return
+    workspace_id = os.environ.get(ENV_WORKSPACE, "")
+    print(json.dumps({"decision": "block", "reason": (
+        "The workspace lists are out of date after the publish or the new dashboard. Call the Blink MCP "
+        f"tool `get_workspace_resources` with workspace_id={workspace_id} and include_tables=false, then finish.")}))
+
+
 def main():
-    event = json.load(sys.stdin).get("hook_event_name") or "SessionStart"
+    payload = json.load(sys.stdin)
+    event = payload.get("hook_event_name") or "SessionStart"
     workspace_id = os.environ.get(ENV_WORKSPACE, "")
     if not workspace_id:
         return  # not configured yet: the setup-blink-plugin skill handles that
     call = f"call the Blink MCP tool `get_workspace_resources` with workspace_id={workspace_id}"
     if event == "SessionStart":
-        note = (f"The user's Blink workspace id is {workspace_id}: pass it as `workspace_id` to every Blink tool "
+        host = blink_host(os.environ.get(ENV_CONTROLLER, ""))
+        blink_url = f"The user's Blink URL is https://{host}. " if host else ""
+        note = (f"{blink_url}The user's Blink workspace id is {workspace_id}: pass it as `workspace_id` to every Blink tool "
                 f"that takes one. Before you answer the user's first message, {call}. A hook saves the result as "
                 "the workspace/ lists; don't read or summarize it, and don't mention this unless it fails. "
                 + MCP_NOT_READY_NOTE)
     else:
-        note = f"The publish changed the workspace lists. To refresh them, {call}."
+        if payload.get("tool_name", "").endswith("publish_dashboard") and not (
+                payload.get("tool_input") or {}).get("confirm"):
+            return  # a preview changes nothing
+        mark_refresh_needed(payload.get("session_id"))
+        note = f"The publish changed the workspace lists. To refresh them, {call} and include_tables=false."
     print(json.dumps({"hookSpecificOutput": {"hookEventName": event, "additionalContext": note}}))
 
 
 if __name__ == "__main__":
-    save() if "--save" in sys.argv else main()
+    if "--save" in sys.argv:
+        save()
+    elif "--stop" in sys.argv:
+        stop()
+    else:
+        main()

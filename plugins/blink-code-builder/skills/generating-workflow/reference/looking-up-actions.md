@@ -29,7 +29,7 @@ workspace/                             # this workspace's own content, kept as r
 ├── tables/
 │   └── tables-schema.yaml             # every table's schema (no row data)
 └── dashboards/
-    ├── dashboards-list.yaml           # every dashboard + a summary of its widgets
+    ├── dashboards-list.tsv            # every dashboard: id, name, published or not
     └── <name>.yaml                    # one fetched dashboard
 ```
 
