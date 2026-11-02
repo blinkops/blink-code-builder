@@ -66,7 +66,7 @@ One file per agent in `workspace/agents/`. Only `name` and `role` are required.
 | `role` | **The agent's system prompt.** The highest-leverage field by far: it decides which ability the agent picks, and when. See [reference/configuration.md](reference/configuration.md). |
 | `constraints` | Hard limits the agent must respect while choosing. |
 | `abilities` | The workflows it may run. Each is `{ability_id, type, auto_approved, summarize_output, summarize_output_instructions}`. |
-| `auto_approved` | **Safety-critical.** `false` (default) makes every run of that ability wait for a human. `true` removes the pause permanently. |
+| `auto_approved` | **Safety-critical, and about chat.** In a chat session, `false` (default) makes the agent ask the user before running that ability; `true` runs it without asking, permanently. When the agent runs as a workflow step (`agents.<id>`), its abilities run without approval prompts either way. |
 | `modes.chat_enabled` | UI label **Interactive mode** — users can chat with the agent. |
 | `modes.code_execution_enabled` | UI label **Agent generated workflows** — the agent may author brand-new workflows at runtime and run them. Default `false`; leave it off unless asked. |
 | `knowledge`, `avatar_*` | Managed in the Blink UI. `fetch_agent` preserves them and `save_agent` never removes them, but this plugin cannot create them. Ask the user to upload knowledge files in the agent builder. |
