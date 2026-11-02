@@ -2,8 +2,10 @@
 
 The Blink look for HTML widgets, from the Blink design system (`blink-ui`, brand guidelines,
 the product). Copy [html-starter.html](html-starter.html) and build on it: it holds every token
-(colors, fonts, spacing, radius, shadow, motion), the dark and light themes, KPI cards, a
-donut, a bar list, a table with severity pills, and the ready message.
+(colors, fonts, spacing, radius, shadow, motion), the dark and light themes, a filter bar,
+tabs, clickable KPI cards, a donut, a bar list, a sortable table with severity pills, a row
+detail modal, live and snapshot loading with their empty and error states, and the ready
+message.
 
 ## Five rules
 
@@ -32,15 +34,16 @@ Severity shows as a filled pill with **dark text** (`#16181D`) on the color, nev
 
 ## Type
 
-- Inter for text, JetBrains Mono for ids, hashes and CVEs (loaded in the starter).
+- The system font stack (`--font-sans`), and the system mono stack (`--font-mono`) for ids,
+  hashes and CVEs. Web fonts are blocked in the widget.
 - **12px is the floor.** Make labels different with weight, letter spacing and uppercase,
   not a smaller size.
 - KPI value 32–44px / 700; card title 18px / 600; body 14px; labels 12px / 600 uppercase.
 
 ## Charts
 
-- Prefer inline SVG for simple charts (the starter has a donut and a bar list). A library from
-  a CDN (Chart.js, D3) is fine, but style it with the tokens; never ship its default theme.
+- Draw charts with inline SVG (the starter has a donut and a bar list). A chart library from a
+  CDN is blocked in the widget.
 - Donut, not pie: inner radius 60–70%, the headline number in the center.
 - Bars: vertical for time, horizontal for ranking. No gradients on bars.
 - Axis text `--text-tertiary` 12px; gridlines `--border-subtle`, dashed.
@@ -54,15 +57,49 @@ Severity shows as a filled pill with **dark text** (`#16181D`) on the color, nev
 - KPI cards have no accent border by default; the blue ring is only for hover and active.
 - Hover and active states change border and shadow, never the layout.
 
+## Filters
+
+Every dashboard gets filters unless the user says no. They run in the page's own script, on the
+loaded rows, and every chart, KPI and table reads the same filtered rows:
+
+- **Filter bar** above the content: a search box, a dropdown per low-cardinality column
+  (severity, status, source, owner — options built from the data, with counts), and a date range
+  or lookback (7 / 14 / 30 / 60 days) on the main date column.
+- **Clickable KPIs:** a click filters by that KPI, a second click clears it; the active KPI gets
+  the blue ring.
+- **Click a chart slice or bar** to filter by that value.
+- Label each dropdown's first option as `<Column>: All` (for example `Severity: All`), so no
+  plural is needed.
+- Show the active filters as chips with one "Clear all", and "N of M rows" next to the table.
+- Keep the filter state in one `state` object and re-render from it.
+- Live data: when a filter narrows a large table, send it to Blink in the request's `filter`
+  instead of loading every row (see [html-widgets.md](html-widgets.md)).
+
+## Layout patterns
+
+- Top bar: title, a one-line subtitle, and "Updated <time>" (the live load time, or the
+  snapshot's `generated_at`).
+- Tabs when there is more than one view, for example *Overview* (KPIs, charts) and *Records*
+  (the filtered table).
+- Click a table row to open its full record in an in-page modal.
+- States: loading (live), empty ("no data yet" for a snapshot that hasn't run, "no rows match"
+  for filters), and error per data source. Never show made-up numbers.
+
 ## Interaction
 
-- Filters, search, sort and drill-down run in the page's own script, on `DATA`.
-- Escape every value you put into HTML (the starter has `esc()`).
+- Draw every data value with `textContent`. Where you build markup as a string, pass every
+  value through `esc()` (in the starter). Never put a raw value in `innerHTML`.
 - Respect `prefers-reduced-motion` (in the starter).
+- No Export, Download or Print buttons: the iframe blocks them (see
+  [html-widgets.md](html-widgets.md)).
+- Show where each value came from (the source column, or "last run" time), so every number can
+  be checked.
+- Action buttons: disabled while their request runs, a clear result message after it, and an
+  in-page confirm step before anything that writes.
 
 ## Before you save
 
-1. Fill the page with sample rows and open it in a browser at the widget's size. Check every
-   state: empty data, one row, many rows, long names.
-2. Check the page sends `html-widget:ready`.
+1. Open the page in a browser: outside Blink it runs in sample-data mode. Check it at the
+   widget's size, in every state: empty data, one row, many rows, long names, each filter.
+2. Check the page sends `html-widget:ready` after the last render.
 3. Check no text is under 12px and no hex color is outside the token block.

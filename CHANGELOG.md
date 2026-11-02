@@ -11,7 +11,7 @@ for breaking changes.
 
 - Dashboards use the remote Blink MCP tools: `fetch_dashboard`, `save_dashboard` and `publish_dashboard`. `save_dashboard` checks the dashboard before it writes.
 - Publish a dashboard in two steps. Claude first shows a preview of the users and groups, then publishes after you confirm.
-- New guide and starter page for Custom HTML widgets in the Blink design.
+- New dashboards are one Custom HTML page in the Blink design, with live Blink table data, filters and a Refresh button. The page gets its data through Blink tables and workflows, and never holds a vendor key.
 - The plugin keeps `workspace/dashboards/dashboards-list.tsv` up to date, like the workflows and agents lists.
 - After a save, a publish or a test run, Claude shows the link to it in Blink.
 - Claude checks a workflow against more workflow engine rules before it saves. These errors do not show at save time, only on the first run.

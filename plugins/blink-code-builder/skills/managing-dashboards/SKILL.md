@@ -1,6 +1,6 @@
 ---
 name: managing-dashboards
-description: Build, edit and publish Blink dashboards — charts, numbers, tables, text and HTML widgets over Blink Tables — as YAML files saved straight to the workspace. Use when the user asks to create a dashboard, add or change a widget, move or resize widgets, see which dashboards exist, or publish/share a dashboard to the Blink Portal.
+description: Build, edit and publish Blink dashboards — custom HTML pages with filters and live data from Blink tables and vendor connections, plus built-in charts, numbers and tables — as YAML files saved straight to the workspace. Use when the user asks to create a dashboard, add or change a widget, move or resize widgets, see which dashboards exist, or publish/share a dashboard to the Blink Portal.
 allowed-tools: Read, Write, Edit, Grep, Glob, mcp__blink-code-builder__fetch_dashboard, mcp__blink-code-builder__save_dashboard, mcp__blink-code-builder__publish_dashboard, mcp__blink-code-builder__get_workspace_resources
 user-invocable: false
 ---
@@ -13,9 +13,21 @@ numbers, charts, tables of records, plus text and custom HTML. The UI calls dash
 
 Widget field reference: [reference/widgets.md](reference/widgets.md). Read it before writing
 or changing a widget.
-For a Custom HTML widget, also read [reference/html-widgets.md](reference/html-widgets.md) (how it
-gets data) and [reference/html-design.md](reference/html-design.md) (the Blink look), and start
+
+## HTML first
+
+Build a new dashboard as **one full-width Custom HTML widget** (`type: html`, `width: 12`): it
+gives the Blink look, in-page filters, tabs, drill-down, action buttons, and live data. The page
+reads Blink tables and runs workflows through one Blink connection; workflows bring in the vendor
+data. Before
+you write it, read [reference/html-widgets.md](reference/html-widgets.md) (data and connections)
+and [reference/html-design.md](reference/html-design.md) (the Blink look and filters), and start
 from [reference/html-starter.html](reference/html-starter.html).
+
+Tell the user once, in one sentence, that Blink also has built-in widgets (number, chart, table
+of records) and you can use those instead. Use built-in widgets when the user asks for them,
+when they want to change widgets themselves in the editor, or on an on-prem install (no HTML
+widget there).
 
 ## No draft, no undo
 
@@ -69,19 +81,26 @@ the user names it.
 
 ## Creating a dashboard
 
-1. Clarify what the user wants to see: which numbers, which breakdowns, over which tables.
-   Grep `dashboards-list.tsv` for the name you plan to use. A dashboard name is unique in the
-   workspace; if it's taken, ask the user before you write anything.
-2. Look up the tables (above).
-3. Write `workspace/dashboards/<name>.yaml` without an `id` and without widget ids. Name the file
+1. Clarify what the user wants to see: which numbers, which breakdowns, which filters, over
+   which tables or vendors, and how fresh the data must be. Grep `dashboards-list.tsv` for the
+   name you plan to use. A dashboard name is unique in the workspace; if it's taken, ask the
+   user before you write anything.
+2. Look up the tables (above), and the connections in `workspace/connections/connections.tsv`.
+3. Plan the three pieces and tell the user in a few lines (see
+   [reference/html-widgets.md](reference/html-widgets.md)): the tables the page reads, the
+   workflows that fill them or run from its buttons, and the Blink connection it uses. If a
+   table, workflow or connection isn't there, ask the user before you build anything.
+4. Write `workspace/dashboards/<name>.yaml` without an `id` and without widget ids. Name the file
    after the display name (lowercase, dashes), so the hook rewrites the same file. Lay the
    widgets out on the 12-column grid — see [reference/widgets.md](reference/widgets.md).
-4. `save_dashboard` with the file's content as the `dashboard` object. The hook rewrites the file
+5. `save_dashboard` with the file's content as the `dashboard` object. The hook rewrites the file
    with the new ids — from now on that file is the dashboard.
-5. Always show the user the editor link from the status, as a clickable link. Copy it exactly;
+6. Always show the user the editor link from the status, as a clickable link. Copy it exactly;
    never build a Blink URL yourself.
-6. If the status lists widgets that can't load their data, fix them (usually a wrong column or
-   aggregation) and save again.
+7. If the status lists widgets that can't load their data, fix them (usually a wrong column or
+   aggregation) and save again. For a snapshot widget, build the refresh workflow next.
+8. For an HTML widget, ask the user to open the dashboard in Preview and tell you what they see.
+   Errors inside the page (a failed request, a script error) never reach your tool output.
 
 If the save fails because the name already exists, don't work around it. Ask the user: edit that
 one (`fetch_dashboard` it, change that file) or pick another name.
@@ -124,10 +143,10 @@ access to the workspace. Treat it like sending the data to them.
      to each target's exact email (users) or exact name (groups). Claude Code asks the user to
      approve it (a plugin hook, every time). If they decline, don't retry — ask what they want.
 - Before you search, write a name the way Blink stores it: translate a Hebrew or other non-Latin
-  name to Latin letters ("ניב" → "niv"). The search needs 3 letters or more.
+  name to Latin letters ("דנה" → "dana"). The search needs 3 letters or more.
 - **Several options:** let the user pick one (AskUserQuestion, name and email in each option).
   Never pick for them. If `more` is above 0, ask for a longer name instead.
-- **One target:** show it ("Niv Levi <niv.l@blinkops.com>") in the sentence before the publish.
+- **One target:** show it ("Dana Cohen <dana.c@example.com>") in the sentence before the publish.
 - **No match:** say so, and offer two ways: the user gives a better name or email, or shares
   it themselves — the preview's `editor_url` → menu → **Manage portal access**.
 - Before the publish, tell the user in plain words which dashboard goes to which users or
@@ -158,6 +177,10 @@ from `dashboards-list.tsv`.
 ## Never
 
 - Guess a table or column name.
+- Add Export, Download or Print buttons to an HTML widget — the iframe blocks them.
+- Load a script, stylesheet or font from a URL in an HTML widget — Blink blocks them; inline everything.
+- Call a vendor API from an HTML widget — a workflow reads the vendor and writes a table.
+- Put a key or token in an HTML widget — use a connection.
 - Publish, or re-share with new people, without the user asking for it in this conversation.
 - Hand-edit `workspace/dashboards/dashboards-list.tsv` — call `get_workspace_resources` instead.
 - Remove a widget's `id` to "start fresh" — that adds a duplicate widget next to the old one.
