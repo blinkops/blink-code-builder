@@ -9,17 +9,17 @@ Modes (argv[1]):
     service is, so likely a typo), or a connection key that is not one of the action's
     connection_types, with the reason, so Claude fixes it (as solution-builder's
     validate-automation.ts does). Actions of services the catalog doesn't have are left alone.
-  - trigger_test_run / publish_automation: asks the user, with the risks found in the last
-    saved YAML and, for publish, whether that YAML passed a test run.
-  - publish_agent: asks, naming auto-approved abilities and code execution.
-  - delete_table, and edit_table when it removes columns: asks, since data is deleted.
+  - trigger_test_run: asks, with the risks found in the last saved YAML, only for a risk the
+    user has not approved in a test run of this session, or whose step (or its loop) changed
+    since. Otherwise it gives no decision, so the user's permission mode decides.
+  All other tools get no decision from the plugin: the user's permission mode decides.
 - `post` (PostToolUse):
-  - save_automation / save_agent: records the risks of the saved YAML per id.
+  - save_automation: records the risks of the saved YAML per id.
   - save_automation: tells Claude which steps have no connection (test-run readiness).
-  - trigger_test_run: records whether the saved YAML passed.
+  - trigger_test_run: records that the risks of the saved YAML are approved for this session
+    (per risk, the hash of its step and of the loops around it).
 
-publish_automation and trigger_test_run take only an id, so the risks come from what this
-plugin recorded at save time (${CLAUDE_PLUGIN_DATA}/safety/<id>.json). An id saved elsewhere
+trigger_test_run takes only an id, so the risks come from what this plugin recorded at save time (${CLAUDE_PLUGIN_DATA}/safety/<id>.json). An id saved elsewhere
 has no record, and the question says so.
 
 Heuristics, not a ban: the user decides. Stdlib only; never fails the call on its own error.
@@ -37,9 +37,7 @@ from typing import Optional
 from _common import catalog_actions, tool_result
 from blink_shared.config import catalog_root
 
-# The only run state that means the test passed (blink-mcp automations.TERMINAL_STATES).
-PASSED_STATE = "completed"
-GATED = {"trigger_test_run", "publish_automation", "publish_agent", "delete_table", "edit_table"}
+GATED = {"trigger_test_run"}
 
 LOOP_ACTION = "internal.for"
 DESTRUCTIVE = re.compile(
@@ -49,6 +47,9 @@ MESSAGING = re.compile(r"(?i)(send|message|mail|notify|broadcast)")
 BROAD_MENTION = re.compile(r"(?i)<!(here|channel|everyone)>|@(here|channel|everyone)\b")
 HUMAN_WAIT = re.compile(r"(?i)web form response|wait_for_response")
 ACTION_LINE = re.compile(r"^(\s*)(?:-\s*)?action:\s*[\"']?([\w.\-]+)")
+ITEM_LINE = re.compile(r"^(\s*)-\s+")
+ID_LINE = re.compile(r"^\s*(?:-\s+)?id:\s*[\"']?([\w.\-]+)")
+STEPS_LINE = re.compile(r"steps:\s*$")
 KEY_LINE = re.compile(r"^(\s*)(-\s+)?([\w.\-]+):(?:\s+(.*?))?\s*$")
 # Not catalog actions: branches, and calls to workspace automations and agents.
 BRANCH_ACTIONS = {"internal.ifTrueBranch", "internal.ifFalseBranch"}
@@ -97,43 +98,81 @@ def save_record(item_id, record):
     (directory / f"{item_id}.json").write_text(json.dumps(record), encoding="utf-8")
 
 
-def actions_with_loops(yaml_text):
-    """(action, inside a loop) for each `action:` line. Loop scope comes from indentation, so a
-    step nested under an internal.for step counts as inside it."""
-    loops = []  # indents of open internal.for steps
-    for line in yaml_text.splitlines():
-        match = ACTION_LINE.match(line)
-        if not match:
+def step_blocks(yaml_text):
+    """(lines, own lines, loops around it) for each step: a list item with an `action:`. The own
+    lines leave out the nested `steps:` list, so a change in a child step doesn't change its parent."""
+    lines = yaml_text.splitlines()
+    items = []
+    for start, line in enumerate(lines):
+        if not (match := ITEM_LINE.match(line)):
             continue
-        indent, action = len(match.group(1)), match.group(2)
-        while loops and indent <= loops[-1]:
-            loops.pop()
-        yield action, bool(loops)
-        if action == LOOP_ACTION:
-            loops.append(indent)
+        dash = len(match.group(1))
+        end = start + 1
+        while end < len(lines) and (not lines[end].strip() or indent_of(lines[end]) > dash):
+            end += 1
+        block = lines[start:end]
+        own = own_lines(block, len(match.group(0)))
+        if any(ACTION_LINE.match(text) for text in own):
+            items.append((start, end, block, own))
+    for start, end, block, own in items:
+        loops = [outer_own for outer_start, outer_end, _, outer_own in items
+                 if outer_start < start and end <= outer_end and step_action(outer_own) == LOOP_ACTION]
+        yield block, own, loops
+
+
+def indent_of(line):
+    return len(line) - len(line.lstrip())
+
+
+def own_lines(block, key_column):
+    own, skipping = [], False
+    for number, line in enumerate(block):
+        if not line.strip():
+            continue
+        column = key_column if number == 0 else indent_of(line)
+        if skipping and (column > key_column or (column == key_column and line.lstrip().startswith("-"))):
+            continue
+        skipping = column == key_column and bool(STEPS_LINE.match(line[column:]))
+        if not skipping:
+            own.append(line)
+    return own
+
+
+def step_action(own):
+    return next((match.group(2) for text in own if (match := ACTION_LINE.match(text))), "")
+
+
+def step_id(own):
+    return next((match.group(1) for text in own if (match := ID_LINE.match(text))), "")
 
 
 def workflow_risks(yaml_text):
-    risks = []
-    for action, in_loop in actions_with_loops(yaml_text):
+    """{risk: fingerprint}. Each risk names its step; the fingerprint is a hash of that step and of
+    the loops around it, so it changes only when the risky step or its loop changes."""
+    risks = {}
+
+    def add(text, *parts):
+        risks[text] = digest("\n".join(parts))
+
+    for block, own, loops in step_blocks(yaml_text):
+        action, label = step_action(own), step_id(own) or "?"
+        fingerprint = ["\n".join(block)] + ["\n".join(loop) for loop in loops]
         if DESTRUCTIVE.search(action):
-            risks.append(f"{action}: deletes or disables something" + (", once per loop item" if in_loop else ""))
-        elif in_loop and MESSAGING.search(action):
-            risks.append(f"{action}: sends a message once per loop item")
-    if match := BROAD_MENTION.search(yaml_text):
-        risks.append(f"mentions {match.group(0)}: notifies everyone in the channel")
-    if HUMAN_WAIT.search(yaml_text):
-        risks.append("waits for a person (web form): an automatic test run cannot answer it")
-    return sorted(set(risks))
-
-
-def agent_risks(yaml_text):
-    risks = []
-    if re.search(r"(?m)^\s*-?\s*auto_approved:\s*true\b", yaml_text):
-        risks.append("an ability is auto_approved: the agent runs it without asking anyone")
-    if re.search(r"(?m)^\s*code_execution_enabled:\s*true\b", yaml_text):
-        risks.append("code execution is on: the agent can run code")
-    return risks
+            add(f"{label} {action}: deletes or disables something" + (", once per loop item" if loops else ""),
+                *fingerprint)
+        elif loops and MESSAGING.search(action):
+            add(f"{label} {action}: sends a message once per loop item", *fingerprint)
+        own_text = "\n".join(own)
+        if match := BROAD_MENTION.search(own_text):
+            add(f"{label} mentions {match.group(0)}: notifies everyone in the channel", *fingerprint)
+        if HUMAN_WAIT.search(own_text):
+            add(f"{label} waits for a person (web form): an automatic test run cannot answer it", *fingerprint)
+    # Outside any step (the trigger, the inputs): the whole YAML is the fingerprint.
+    if (match := BROAD_MENTION.search(yaml_text)) and not any("mentions" in risk for risk in risks):
+        add(f"mentions {match.group(0)}: notifies everyone in the channel", yaml_text)
+    if HUMAN_WAIT.search(yaml_text) and not any("waits for a person" in risk for risk in risks):
+        add("waits for a person (web form): an automatic test run cannot answer it", yaml_text)
+    return dict(sorted(risks.items()))
 
 
 def scalar(value):
@@ -270,27 +309,34 @@ def risk_lines(record):
     return "Risks in the saved YAML:\n" + "\n".join(f"- {risk}" for risk in record["risks"])
 
 
+def unapproved_risks(record, session_id):
+    """The risks of the saved YAML that the user has not approved in a test run of this session,
+    or whose step changed since. A record without fingerprints (an older plugin) has none approved."""
+    fingerprints = record.get("fingerprints") or {}
+    approved = record.get("approved") or {}
+    approved_now = approved.get("fingerprints", {}) if session_id and approved.get("session_id") == session_id else {}
+    return [risk for risk in record["risks"] if risk not in fingerprints or approved_now.get(risk) != fingerprints[risk]]
+
+
+def approved_note(record, new):
+    if count := len(record["risks"]) - len(new):
+        return f"\n{count} other risk(s) not shown: approved earlier in this session, and those steps did not change."
+    return ""
+
+
 def pre(payload):
     name, args = tool(payload.get("tool_name", "")), payload.get("tool_input") or {}
     if name == "save_automation":
         if errors := automation_errors(args.get("yaml") or ""):
             decide("deny", "Not saved. Fix these in the YAML and save again:\n" + "\n".join(f"- {e}" for e in errors))
     elif name == "trigger_test_run":
-        decide("ask", "Runs the saved draft for real, against live systems.\n"
-               + risk_lines(load_record(args.get("automation_id"))))
-    elif name == "publish_automation":
         record = load_record(args.get("automation_id"))
-        tested = "The saved YAML passed a test run." if record and record.get("tested") else \
-            "The saved YAML has NO successful test run since its last save."
-        decide("ask", f"Publishing makes the automation live.\n{tested}\n{risk_lines(record)}")
-    elif name == "publish_agent":
-        decide("ask", "Publishing makes the agent callable from workflows.\n"
-               + risk_lines(load_record(args.get("agent_id"))))
-    elif name == "delete_table":
-        decide("ask", f"Deletes the table {args.get('table') or '(unknown)'!r} and all its rows. This cannot be undone.")
-    elif name == "edit_table" and args.get("remove_fields"):
-        decide("ask", "Removes columns " + ", ".join(args["remove_fields"])
-               + f" from table {args.get('table')!r}, with their data. This cannot be undone.")
+        if record is None:
+            decide("ask", "Runs the saved draft for real, against live systems.\n" + risk_lines(record))
+        elif new := unapproved_risks(record, payload.get("session_id")):
+            decide("ask", "Runs the saved draft for real, against live systems.\n"
+                   + risk_lines({"risks": new}) + approved_note(record, new))
+        # No new risks: no decision, so the user's permission mode decides.
 
 
 def post(payload):
@@ -302,21 +348,24 @@ def post(payload):
     if name == "save_automation":
         item_id = result.get("automation_id") or args.get("automation_id")
         yaml_text = args.get("yaml") or ""
-        save_record(item_id, {"risks": workflow_risks(yaml_text), "sha": digest(yaml_text), "tested": False})
+        risks = workflow_risks(yaml_text)
+        # Keep the approval: unapproved_risks() compares it with the new fingerprints.
+        approved = (load_record(item_id) or {}).get("approved")
+        save_record(item_id, {"risks": list(risks), "fingerprints": risks, "sha": digest(yaml_text),
+                              "approved": approved})
         if missing := steps_without_connection(yaml_text):
             readiness = ("Test run readiness: BLOCKED. These steps have no connection; pick one from "
                          "workspace/connections/connections.tsv or ask the user:\n" + "\n".join(f"- {m}" for m in missing))
         else:
             readiness = "Test run readiness: READY."
         print(json.dumps({"hookSpecificOutput": {"hookEventName": "PostToolUse", "additionalContext": readiness}}))
-    elif name == "save_agent":
-        item_id = result.get("agent_id") or args.get("agent_id")
-        save_record(item_id, {"risks": agent_risks(args.get("yaml") or "")})
     elif name == "trigger_test_run":
         item_id = args.get("automation_id")
         record = load_record(item_id)
         if record is not None:
-            record["tested"] = str(result.get("state", "")).lower() == PASSED_STATE
+            # The run went ahead, so the user approved its risks (or none were new): remember
+            # them for this session until their steps change.
+            record["approved"] = {"session_id": payload.get("session_id"), "fingerprints": record.get("fingerprints") or {}}
             save_record(item_id, record)
 
 

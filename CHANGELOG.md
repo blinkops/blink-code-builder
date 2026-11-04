@@ -7,6 +7,11 @@ when this version increases, so increase it in each PR that changes the plugin.
 Versions use [semver](https://semver.org/): patch for bug fixes, minor for new features, major
 for breaking changes.
 
+## 0.5.1
+
+- Fewer approval prompts. Claude Code asks before a test run only when the workflow has a risky step that you did not approve in a test run of this session, or that changed since. The prompt lists only those steps.
+- The plugin no longer asks before a publish or a table delete. Your Claude Code permission mode decides, and Claude asks you in the chat first.
+
 ## 0.5.0
 
 - Packs: the workflows and agents lists show the pack of each item (`pack_name` column).

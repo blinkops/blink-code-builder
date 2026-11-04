@@ -139,8 +139,8 @@ access to the workspace. Treat it like sending the data to them.
      `target` (the one user or group found) or up to 10 `options`, and `more` when there are
      more matches.
   2. **Publish:** after the user agrees, the same call with `confirm=true` and `share_with` set
-     to each target's exact email (users) or exact name (groups). Claude Code asks the user to
-     approve it (a plugin hook, every time). If they decline, don't retry — ask what they want.
+     to each target's exact email (users) or exact name (groups). If they say no, don't
+     retry — ask what they want.
 - Before you search, write a name the way Blink stores it: translate a Hebrew or other non-Latin
   name to Latin letters ("דנה" → "dana"). The search needs 3 letters or more.
 - **Several options:** let the user pick one (AskUserQuestion, name and email in each option).

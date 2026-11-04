@@ -44,11 +44,13 @@ build the wide version and just make sure what you tell the user before the run 
 
 ## The gate: Claude Code's approval prompt
 
-`trigger_test_run` and `publish_automation` never run on their own: a plugin hook makes Claude
-Code ask the user first, and the prompt lists the risks it found in the YAML at save time
-(destructive action names, messaging inside `internal.for`, broadcast mentions, human-wait
-steps). The prompt is the user's gate — your job is to make sure they understand it before it
-appears:
+`trigger_test_run` makes Claude Code ask the user when the YAML at save time has a new risk (destructive
+action names, messaging inside `internal.for`, broadcast mentions, human-wait steps) or was
+saved outside this plugin; the prompt lists the new risks. A risk is new until the user
+approves a test run with it in this session, and again when its step or its loop changes.
+With no new risk, the hook gives no decision and the user's permission mode decides, so a user
+in auto mode isn't stopped again for steps they already approved. The prompt is the user's
+gate — your job is to make sure they understand it before it appears:
 
 1. **Tell the user what will happen, in plain language, before you call the tool** — concrete
    scope, not pattern names. Not "S6 matched a messaging pattern" but "step S6 sends a Slack
@@ -57,12 +59,14 @@ appears:
    nothing — it can miss things (prod targets, writes at scale).
 2. **If there's a cheap way to shrink the radius first** (add a `LIMIT`, retarget to a test
    channel for this run), offer it before running.
-3. **Then call the tool.** Claude Code shows the approval prompt; the user answers it.
+3. **Then call the tool.** If the scan found new risks, Claude Code shows the approval
+   prompt; the user answers it.
 4. **If the user declines the prompt, don't retry.** Ask what they want instead — usually a
    patched YAML (→ Revising flow), re-saved, then a fresh run.
 
-Never call either tool on your own initiative or "to save a round trip." Each approval covers
-one call — a yes for this test run is not standing approval for future runs or for publishing.
+Never call either tool on your own initiative or "to save a round trip." A yes for a test run
+covers the same risky steps, unchanged, in later test runs of this session only — never
+publishing. Still tell the user before each run what it will do.
 
 ## Human-wait steps
 
@@ -93,8 +97,8 @@ triggered run executes** — the risk repeats on every trigger, unattended. So:
 - **Only after a passed test of the current draft.** The saved draft must have completed a test
   run (`state` = `Completed`) and not been edited since — otherwise what passed is not what
   would go live. The fix is always "test it first." Publish untested only if the user, after
-  hearing that warning, explicitly accepts it. The approval prompt also says whether the saved
-  YAML passed a test (it only knows about runs started with `trigger_test_run`).
+  hearing that warning, explicitly accepts it. No prompt checks this for you: the plugin does
+  not gate `publish_automation`, so get the user's yes in the chat.
 - **Restate the risks, fresh.** Prior approvals don't carry over — a yes for the test run
   covered one supervised execution, not a standing schedule. Describe the flagged steps again
   and remind the user they'll fire on every future trigger.

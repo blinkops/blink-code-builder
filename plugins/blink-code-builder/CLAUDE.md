@@ -87,8 +87,7 @@ Each dashboard that's been fetched or saved has its own YAML file at
 `workspace/dashboards/<name>.yaml`: the `save_fetched.py` hook writes it after `fetch_dashboard`
 and again after `save_dashboard` (with the new widget ids). Save it back by passing the file's
 content to `save_dashboard`. A dashboard has no draft: a save is live at once. The plugin never deletes a
-dashboard or a widget. `publish_dashboard` always makes Claude Code ask the user first (a
-`PreToolUse` hook). See the **managing-dashboards** skill.
+dashboard or a widget. See the **managing-dashboards** skill.
 
 ## Safety and checks (plugin hooks)
 
@@ -98,11 +97,13 @@ The Blink server does what it is asked; approvals are this plugin's job (`hooks/
   connection key is not one of its action's `connection_types` — the reason names the steps;
   fix them and save again. The controller's own errors come back from the tool. After a save,
   a hook adds the test-run readiness: the steps that still have no connection.
-- `trigger_test_run`, `publish_automation`, `publish_agent`, `delete_table`, and `edit_table`
-  with `remove_fields` make Claude Code ask the user, showing the risks found in the YAML at
-  save time and, for publish, whether the saved draft passed a test run.
+- `trigger_test_run` asks only for a risk that the user has not approved in a test run of this
+  session, or whose step (or its loop) changed since, or when the YAML was not saved through
+  this plugin. Otherwise the hook gives no decision, and the user's permission mode decides.
+- The plugin does not ask before any other tool. For a publish or a delete, tell the user in
+  plain words what will happen and get their yes in the chat first.
 
-Before such a call, tell the user in plain words what will happen. If they decline, don't retry.
+If the user declines, don't retry.
 
 ## Links to Blink
 

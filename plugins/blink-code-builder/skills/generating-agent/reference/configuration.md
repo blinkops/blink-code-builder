@@ -129,16 +129,16 @@ Why this deserves a decision rather than a copy-paste:
 - **It's permanent** until someone edits and republishes the agent.
 - **Where runtime workflow authoring is enabled**, an agent can create a workflow and run it
   on a later turn — so the set of things it can do is not fully fixed by your ability list.
-- **Nothing warns you at run time.** The publish approval prompt names auto-approved
-  abilities once; after that, no check and no runtime prompt.
+- **Nothing warns you.** No prompt names auto-approved abilities, at publish or at run
+  time.
 
 Reasonable rule of thumb: read-only enrichment and lookups are fine auto-approved — waiting on
 a reputation lookup is pure friction. Anything that changes state outside Blink should stay
 approval-gated.
 
 Before `publish_agent`, tell the user in plain words which abilities are auto-approved and
-what they can change. Claude Code then shows an approval prompt listing them (and code
-execution); if the user declines, don't retry.
+what they can change (and whether code execution is on), and get their yes. If the user
+says no, don't retry.
 
 ## `modes`
 
