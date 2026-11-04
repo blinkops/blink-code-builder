@@ -59,7 +59,7 @@ def save_dashboard(tool, result, tool_input, session_id):
               "file, then call save_dashboard with the file's content as the `dashboard` object.")
     if tool == "save_dashboard" and not (tool_input.get("dashboard") or {}).get("id"):
         mark_refresh_needed(session_id)
-        status += (" This created a new dashboard: call get_workspace_resources with include_tables=false "
+        status += (" This created a new dashboard: call get_workspace_resources "
                    "to add it to dashboards-list.tsv.")
     errors = result.get("data_errors") or []
     if errors:

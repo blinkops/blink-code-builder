@@ -62,14 +62,13 @@ one-line status with the path, the id and the editor link — not the dashboard.
 ## Finding a dashboard
 
 Grep `workspace/dashboards/dashboards-list.tsv`. If the dashboard isn't there, call
-`get_workspace_resources` (`include_tables=false` is enough) to refresh the list. A hook asks for
+`get_workspace_resources` to refresh the list. A hook asks for
 the same refresh after a save that creates a dashboard, and after a publish.
 
 ## Look up the tables first
 
 Never guess a table or column name. Read `workspace/tables/tables-schema.yaml`; if it's
-missing, or a table changed this session, run `get_workspace_resources` with
-`include_tables=true`. Use a table's `table` value (not `display_name`) as `table_name`, and its
+missing, or a table changed this session, run `get_workspace_resources`. Use a table's `table` value (not `display_name`) as `table_name`, and its
 `columns[].name` values as `column`, `group_by_column` and `aggregation_column`.
 
 Check each column's `type` too: `date_bucket` needs a date column, and `aggregation_column` (for

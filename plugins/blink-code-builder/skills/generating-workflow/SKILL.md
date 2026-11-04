@@ -58,7 +58,7 @@ Every `mcp__blink-code-builder__*` tool takes a `workspace_id` — use the id th
    ```
    If resolution failed because no playbooks exist yet, leave the param empty and call it out in the step 8 handoff note.
 5. **Self-check.** Run the draft through the pre-save checklist in [reference/validation.md](reference/validation.md) — YAML gotchas, action names verbatim from the catalog, required inputs, enum values, step-id references, inline Python syntax, and **connection keys that are one of the action's `connection_types`** (a wrong/transposed integration slug on a step's `connections:` saves fine even when the action `full_name` is correct, and never binds). Then check it against the workflow engine's compile rules in [reference/engine-validation.md](reference/engine-validation.md) — required `name`/`automation_type`, trigger rules, condition shape, flow-control limits, step options, required inputs of engine-implemented actions. **The save does not run the engine's compile**: a draft that breaks one of those rules saves fine and then fails its first run with `Workflow <id>: <message>`. If the catalog is missing, call `export_catalog` once; if that fails, stop and route the user through `setup-blink-plugin` — unless this is a **code-only revision** (no new actions), which can go ahead without it.
-6. **Save** as a draft: Read `/tmp/<name>.yaml` and call the `save_automation` tool with its content as `yaml`. To update an existing automation pass its `automation_id`; an empty `automation_id` **creates a new one**. So before a first save, grep `workspace/workflows/workflows-list.tsv` for the `name:` — if a row matches, it's the same automation: pass that row's `id` (or ask, if it may be a different workflow with the same name). Optionally pass `pack_id` to create it in a specific pack. Two ways a save fails:
+6. **Save** as a draft: Read `/tmp/<name>.yaml` and call the `save_automation` tool with its content as `yaml`. To update an existing automation pass its `automation_id`; an empty `automation_id` **creates a new one**. So before a first save, grep `workspace/workflows/workflows-list.tsv` for the `name:` — if a row matches, it's the same automation: pass that row's `id` (or ask, if it may be a different workflow with the same name). Optionally pass `pack` (a pack name) to create it in that pack; a pack that doesn't exist is created. Without it, a new workflow goes in the default pack. Two ways a save fails:
    - **The plugin refuses the call** naming actions that aren't in the local catalog (likely typos) → look them up, fix, re-call.
    - **A tool error with the controller's message** (invalid YAML) → fix every reported problem in one pass, re-save.
 
@@ -164,7 +164,7 @@ action. Short version:
   list, a running tally, a queue) with no existing system of record — not data that
   already lives in a real vendor system (use that vendor's action instead).
 - **Look up the schema before drafting a step:** read `workspace/tables/tables-schema.yaml`
-  (regenerate with `get_workspace_resources` with `include_tables=true` if it's missing, stale >24h, or the
+  (regenerate with `get_workspace_resources` if it's missing, stale >24h, or the
   user just changed a table this session) instead of guessing column names. Use the
   table's internal `table` name in a step's `table:` input, not its `display_name`.
 - **`system.TableClear`, `system.TableRemove`, and `tables.DeleteRecordsV2`** are
