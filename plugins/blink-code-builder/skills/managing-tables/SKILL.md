@@ -109,8 +109,8 @@ prompt from the plugin:
 - Only remove a field the user asked to remove — never on your own initiative.
 - Before the call, tell the user in plain language which fields go and that their data in
   every row (roughly `row_count` rows, from the schema file) is lost for good.
-- Then call `edit_table` with `remove_fields`; Claude Code asks the user to approve.
-- If they decline, don't retry — ask what they want instead.
+- Get the user's yes in the chat, then call `edit_table` with `remove_fields`.
+- If they say no, don't retry — ask what they want instead.
 
 Blink's own system columns (id, created/updated at, created/updated by) can never be
 removed — don't try.
@@ -120,13 +120,13 @@ removed — don't try.
 `delete_table` removes the table entirely — schema and rows both. Workspace-wide and
 immediate, same as create/edit: no draft, no undo.
 
-It's gated the same way as `remove_fields`:
+Same rules as `remove_fields`:
 
 - Only delete a table the user asked to delete — never on your own initiative.
 - Before the call, tell the user in plain language which table goes and roughly how many
   rows with it (`row_count` in the schema file).
-- Then call `delete_table` with `workspace_id` and `table` (the real name); Claude Code asks
-  the user to approve. If they decline, don't retry — ask what they want instead.
+- Get the user's yes in the chat, then call `delete_table` with `workspace_id` and `table`
+  (the real name). If they say no, don't retry — ask what they want instead.
 - It returns `{table}`. Afterwards call `get_workspace_resources` to refresh the schema file.
 
 Reference fields on other tables pointing at the one you're deleting aren't checked

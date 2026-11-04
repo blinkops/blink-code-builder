@@ -69,10 +69,10 @@ against that table.
 
 `system.TableClear` (wipes every row) and `system.TableRemove` (deletes the table) are
 fully irreversible; `tables.DeleteRecordsV2` deletes matching rows. All three are caught
-by the plugin's safety check: Claude Code asks the user to approve `trigger_test_run` and
-`publish_automation`, listing destructive steps — see [../generating-workflow/reference/safety.md](../generating-workflow/reference/safety.md)
-for the flow. Nothing further to do here: before either call, describe the step in plain
-language, same as any other destructive action.
+by the plugin's safety check: Claude Code asks the user to approve `trigger_test_run`,
+listing destructive steps — see [../generating-workflow/reference/safety.md](../generating-workflow/reference/safety.md)
+for the flow. Nothing further to do here: before a test run or a publish, describe the step in
+plain language, same as any other destructive action.
 
 ## Lifecycle: test runs, drafts, publishing
 

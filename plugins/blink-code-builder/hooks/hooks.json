@@ -20,20 +20,11 @@
     ],
     "PreToolUse": [
       {
-        "matcher": "mcp__blink-code-builder__(save_automation|trigger_test_run|publish_automation|publish_agent|delete_table|edit_table)",
+        "matcher": "mcp__blink-code-builder__(save_automation|trigger_test_run)",
         "hooks": [
           {
             "type": "command",
             "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/safety_gate.py\" pre"
-          }
-        ]
-      },
-      {
-        "matcher": "mcp__blink-code-builder__publish_dashboard",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/publish_gate.py\""
           }
         ]
       },
@@ -49,7 +40,7 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "mcp__blink-code-builder__(save_automation|save_agent|trigger_test_run)",
+        "matcher": "mcp__blink-code-builder__(save_automation|trigger_test_run)",
         "hooks": [
           {
             "type": "command",

@@ -129,9 +129,8 @@ saved/published elsewhere), call `get_workspace_resources` again before telling 
    on-demand workflows of this workspace — see **Edge cases**. Fix and re-save.
 7. **Offer to publish — never publish on your own initiative.** Say in plain language what
    the agent will do, which abilities it can run, who they affect, and the risks (any
-   auto-approved ability, code execution). Then `publish_agent` with `agent_id`. Claude Code
-   shows the user an approval prompt with those risks; if they decline, don't retry — ask what
-   they want instead. Until it is published the agent is a draft: not callable from any workflow.
+   auto-approved ability, code execution). After the user says yes, call `publish_agent`
+   with `agent_id`. If they say no, don't retry — ask what they want instead. Until it is published the agent is a draft: not callable from any workflow.
    After a publish, call `get_workspace_resources` again so `agents-list.tsv` shows it.
 
 ## Agent and workflow together
@@ -190,7 +189,7 @@ then the agent, then the calling workflow. Say which order you're taking and why
 | Ability doesn't exist in this workspace (imported agent, deleted workflow) | `save_agent` fails the same way | Tell the user, name the ability, and ask: rebuild and publish that workflow, or remove the ability. **Never delete the line on your own to get the save through** — that strips a capability with no trace. |
 | `type: action` on an ability | Caught by your self-check; `save_agent` rejects it anyway (its id is not a workflow) | Abilities are workflows only. Wrap the vendor action in a small on-demand workflow, publish it, attach that. |
 | Same `ability_id` listed twice | Nothing rejects it — your self-check is the only catch | Keep one entry. Two with different `auto_approved` make the agent pick unpredictably. |
-| An ability has `auto_approved: true`, or `modes.code_execution_enabled` is on | The approval prompt at `publish_agent` lists them | Before publishing, describe each one and who it affects in plain words and ask a direct yes/no. A yes covers this publish only. |
+| An ability has `auto_approved: true`, or `modes.code_execution_enabled` is on | Nothing flags them at `publish_agent` | Before publishing, describe each one and who it affects in plain words and ask a direct yes/no. A yes covers this publish only. |
 | An agent with this `name:` already exists | Nothing stops a second one: `save_agent` without `agent_id` always creates a new agent | Check `agents-list.tsv` before creating. Either edit that agent (`fetch_agent`, save with its `agent_id`), or rename in the YAML (separate agent). |
 | An ability's workflow itself calls an agent | nothing local | The controller enforces the depth limit of 5 at run time and errors if exceeded, so a cycle stops itself. Mention it if the user is designing deep chains. |
 | User names an agent that isn't in `agents-list.tsv`, or the file looks stale | It's probably a draft, or the file wasn't re-synced yet | Call `get_workspace_resources` again, then grep again. Still missing? `fetch_agent` by id if you have one. Tell the user it must be published before a workflow can call it. Never invent an id. |
@@ -214,7 +213,7 @@ then the agent, then the calling workflow. Say which order you're taking and why
 **Never:**
 
 - Publish on your own initiative, reuse a previous publish approval, or retry a publish the
-  user declined in the approval prompt.
+  user declined.
 - Set `auto_approved: true` on an ability that changes anything outside Blink, without a
   direct yes for that specific ability.
 - Attach an ability by name or invent a uuid when nothing matches.
