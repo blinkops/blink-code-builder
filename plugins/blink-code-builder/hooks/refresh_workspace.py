@@ -47,25 +47,32 @@ def tsv(header, rows, note=None):
     return "\n".join(lines)
 
 
+def pack_items(packs, field):
+    """(item, pack name) for every item of every pack."""
+    return [(item, pack["name"]) for pack in packs for item in pack[field]]
+
+
 def render(result):
-    """{relative path key: file text} from the tool's objects. Tables only when included."""
+    """({path key: file text}, {path key: row count}) from the tool's objects."""
+    workflows = pack_items(result["automation_packs"], "automations")
+    agents = pack_items(result["agent_packs"], "agents")
     files = {
-        "workflows": tsv("# id\tname\tautomation_type\tstate\tactive",
-                         [[w["id"], w["name"], w["automation_type"], w["state"], "true" if w["active"] else "false"]
-                          for w in result["workflows"]], STATE_NOTE),
-        "agents": tsv("# id\tname\tstate",
-                      [[a["id"], f"{a['name']} | {a['title']}" if a.get("title") else a["name"], a["state"]]
-                       for a in result["agents"]], STATE_NOTE),
+        "workflows": tsv("# id\tname\tautomation_type\tstate\tactive\tpack_name",
+                         [[w["id"], w["name"], w["automation_type"], w["state"], "true" if w["active"] else "false",
+                           pack] for w, pack in workflows], STATE_NOTE),
+        "agents": tsv("# id\tname\tstate\tpack_name",
+                      [[a["id"], f"{a['name']} | {a['title']}" if a.get("title") else a["name"], a["state"], pack]
+                       for a, pack in agents], STATE_NOTE),
         "connections": tsv("# name\ttype_name",
                            [[c["name"], c["type_name"]] for c in result["connections"]]),
         "dashboards": tsv("# id\tdisplay_name\tpublished_to_portal\tcategories",
                           [[d["id"], d["display_name"], "true" if d["is_portal"] else "false",
                             ",".join(d["categories"])] for d in result["dashboards"]]),
+        "tables": to_yaml({"tables": sorted(result["tables"], key=lambda table: table["table"])}),
     }
-    if result.get("tables") is not None:
-        tables = sorted(result["tables"], key=lambda table: table["table"])
-        files["tables"] = to_yaml({"tables": tables})
-    return files
+    sizes = {"workflows": len(workflows), "agents": len(agents)}
+    sizes |= {key: len(result[key]) for key in ("connections", "dashboards", "tables")}
+    return files, sizes
 
 
 def save():
@@ -74,8 +81,9 @@ def save():
     project = Path(os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd())
     try:
         result = tool_result(payload.get("tool_response"))
+        files, sizes = render(result)
         written = []
-        for key, text in render(result).items():
+        for key, text in files.items():
             path = project / FILES[key]
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(text.rstrip("\n") + "\n", encoding="utf-8")
@@ -83,7 +91,7 @@ def save():
         if not written:
             raise ValueError(f"no workspace lists in the result (keys: {sorted(result)})")
         status = f"ok: saved {', '.join(written)} to {project / 'workspace'}."
-        counts = ", ".join(f"{len(result[key])} {key}" for key in written)
+        counts = ", ".join(f"{sizes[key]} {key}" for key in written)
         message = f"Blink \u2713 workspace lists ready: {counts}."
     except Exception as exc:
         status = f"error: could not save the workspace lists ({exc}). Tell the user."
@@ -104,7 +112,7 @@ def stop():
     workspace_id = os.environ.get(ENV_WORKSPACE, "")
     print(json.dumps({"decision": "block", "reason": (
         "The workspace lists are out of date after the publish or the new dashboard. Call the Blink MCP "
-        f"tool `get_workspace_resources` with workspace_id={workspace_id} and include_tables=false, then finish.")}))
+        f"tool `get_workspace_resources` with workspace_id={workspace_id}, then finish.")}))
 
 
 def main():
@@ -126,7 +134,7 @@ def main():
                 payload.get("tool_input") or {}).get("confirm"):
             return  # a preview changes nothing
         mark_refresh_needed(payload.get("session_id"))
-        note = f"The publish changed the workspace lists. To refresh them, {call} and include_tables=false."
+        note = f"The publish changed the workspace lists. To refresh them, {call}."
     print(json.dumps({"hookSpecificOutput": {"hookEventName": event, "additionalContext": note}}))
 
 

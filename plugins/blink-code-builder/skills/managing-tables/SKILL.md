@@ -22,7 +22,7 @@ request is unclear.
 
 ## Look up existing tables first
 
-Read `workspace/tables/tables-schema.yaml` in the user's repo (or call `get_workspace_resources` with `include_tables=true` if it's
+Read `workspace/tables/tables-schema.yaml` in the user's repo (or call `get_workspace_resources` if it's
 missing; a hook writes the file) before creating a table, to avoid creating a near-duplicate of one that already
 exists.
 

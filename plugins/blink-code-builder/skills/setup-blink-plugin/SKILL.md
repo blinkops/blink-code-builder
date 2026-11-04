@@ -59,7 +59,7 @@ Go through these in order. Fix an item before moving to the next one.
 1. **python3** — `python3 --version` works (step 1). If a hook fails with `python3: command not found`, that's the cause: install it (step 1), then ask the user to restart Claude Code.
 2. **Config** — only print `set`/`unset` for `CLAUDE_PLUGIN_OPTION_BLINK_{CONTROLLER_URL,WORKSPACE_ID}`, **never the values**. Anything required that's `unset` → step 2.
 3. **MCP server** — check `/mcp`: `blink-code-builder` must be connected. Not listed → the plugin registers it at session start, so ask the user to restart Claude Code once (step 3). `needs authentication` → the user runs `/mcp`, selects **blink-code-builder**, chooses **Authenticate**, signs in with their Blink login, then sends any message.
-4. **Workspace lists** — `workspace/workflows/workflows-list.tsv`, `workspace/agents/agents-list.tsv`, `workspace/connections/connections.tsv` and `workspace/tables/tables-schema.yaml` exist in the project. Missing → call `get_workspace_resources` with the configured workspace id and `include_tables=true`; a hook saves the files.
+4. **Workspace lists** — `workspace/workflows/workflows-list.tsv`, `workspace/agents/agents-list.tsv`, `workspace/connections/connections.tsv` and `workspace/tables/tables-schema.yaml` exist in the project. Missing → call `get_workspace_resources` with the configured workspace id; a hook saves the files.
 5. **Catalog** — `${CLAUDE_PLUGIN_DATA}/catalog/` has `actions/`, `triggers/`, `actions.tsv` and `triggers.tsv`, and `actions.tsv` has a few thousand lines. Missing → call `export_catalog` once; a hook saves it.
 
 If a save hook replies with an `error:` line, show it to the user.

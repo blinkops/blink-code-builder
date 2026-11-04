@@ -19,10 +19,10 @@ catalog/
 
 workspace/                             # this workspace's own content, kept as repo files
 ├── workflows/
-│   ├── workflows-list.tsv             # greppable: id <TAB> name <TAB> automation_type <TAB> state <TAB> active
+│   ├── workflows-list.tsv             # greppable: id <TAB> name <TAB> automation_type <TAB> state <TAB> active <TAB> pack_name
 │   └── <name>.yaml                    # one fetched workflow
 ├── agents/
-│   ├── agents-list.tsv                # greppable: id <TAB> name <TAB> state
+│   ├── agents-list.tsv                # greppable: id <TAB> name <TAB> state <TAB> pack_name
 │   └── <name>.yaml                    # one fetched agent
 ├── connections/
 │   └── connections.tsv                # greppable: name <TAB> type_name — the workspace's bound connections

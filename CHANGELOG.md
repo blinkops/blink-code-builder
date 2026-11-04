@@ -7,6 +7,13 @@ when this version increases, so increase it in each PR that changes the plugin.
 Versions use [semver](https://semver.org/): patch for bug fixes, minor for new features, major
 for breaking changes.
 
+## 0.5.0
+
+- Packs: the workflows and agents lists show the pack of each item (`pack_name` column).
+- `save_automation` saves a workflow into a pack by its name. If the pack does not exist, Blink creates it.
+- The workspace lists always include the tables.
+- Needs the Blink MCP server with pack support. Earlier plugin versions cannot read its workspace lists, so update the plugin.
+
 ## 0.4.0
 
 - Dashboards use the remote Blink MCP tools: `fetch_dashboard`, `save_dashboard` and `publish_dashboard`. `save_dashboard` checks the dashboard before it writes.

@@ -30,7 +30,8 @@ catalog.
 ### Workflows
 
 `workspace/workflows/workflows-list.tsv` lists every workflow (automation/playbook) in the workspace, drafts
-included — id, name, `automation_type`, state (`draft`/`published`/`modified`), and `active`.
+included — id, name, `automation_type`, state (`draft`/`published`/`modified`), `active`, and
+`pack_name`.
 It's a repo file, written from the remote MCP tool `get_workspace_resources`: the `SessionStart`
 hook asks you to call it, and so does a hook after `publish_automation` / `publish_agent`. A
 `PostToolUse` hook (`hooks/refresh_workspace.py --save`) writes the files. Grep it first; call
@@ -48,7 +49,7 @@ and gives you the path and id instead of the YAML. Save it back with `save_autom
 ### Agents
 
 `workspace/agents/agents-list.tsv` lists every agent in the workspace, drafts included — id,
-name, and state (`draft`/`published`/`modified`). A step calls an agent as `agents.<id>`.
+name, state (`draft`/`published`/`modified`), and `pack_name`. A step calls an agent as `agents.<id>`.
 It's a repo file, written from `get_workspace_resources` like the workflows list. Grep it
 first; call `get_workspace_resources` again if it looks stale. An agent is callable as a workflow step only
 once its row is `published` or `modified` — a draft is never callable. See the
@@ -80,7 +81,7 @@ workflow (read/write rows from inside a workflow step).
 name, whether it's published to the Portal, and categories. It's written from
 `get_workspace_resources`, together with the workflow and agent lists. After a save that creates a
 dashboard, and after any publish, a `Stop` hook doesn't let you end the turn until you call
-`get_workspace_resources` with `include_tables=false`.
+`get_workspace_resources`.
 
 Each dashboard that's been fetched or saved has its own YAML file at
 `workspace/dashboards/<name>.yaml`: the `save_fetched.py` hook writes it after `fetch_dashboard`
