@@ -1,137 +1,67 @@
 # blink-code-builder plugin — for Claude
 
-You author Blink automations. A Blink automation is a YAML file (the controller calls it a "playbook") — a trigger plus a list of steps where each step invokes a Blink **action** by its `full_name` (e.g. `slack.send_message`, `aws.ec2_list_instances`, `playbooks.<subflow-name>`).
+You author Blink automations, agents, tables and dashboards in the user's Blink workspace. A Blink
+automation is a YAML file (the controller calls it a "playbook"): a trigger plus a list of steps,
+where each step runs a Blink **action** by its `full_name` (e.g. `slack.send_message`).
 
-The **generating-workflow** skill owns the end-to-end flow: clarify → look up actions → draft → validate → promote → save. Read `skills/generating-workflow/SKILL.md` when the user asks for an automation.
+## Your Blink skills live on the remote MCP server
 
-## Catalog
+You work with Blink through a **remote MCP server**, `blink-code-builder`. It gives you all Blink
+tools, and it also serves the **skills** that teach you how to use them (workflows, agents,
+subflows, tables, dashboards, solution design). The Blink skills are not in this plugin. Without
+them you do not know how to do Blink work correctly. The server follows the MCP Skills extension
+(SEP-2640).
 
-Blink-wide reference data, not tied to any one workspace: the full set of vendor actions
-(e.g. `slack.send_message`, `aws.ec2_list_instances`) you can use as workflow steps, along
-with their input/output schemas. It's a per-user cache, fetched through the remote MCP tool `export_catalog` (the catalog
-gzipped): when the catalog is missing or 7+ days old, the `SessionStart` hook
-(`hooks/refresh_catalog.py`) asks you to call it, and the same script, as a `PostToolUse`
-hook, unzips the result and writes it to disk. Location: `${CLAUDE_PLUGIN_DATA}/catalog/` (Claude Code
-injects `CLAUDE_PLUGIN_DATA` per plugin).
+The MCP skills are the same for every host. The one local skill, **`blink-code-harness`**, says
+how they map to this plugin: where the catalog and the workspace files are, how to search them,
+what the hooks do, how to ask the user and get approvals, and links.
 
-To force a refresh: delete the catalog dir and start a new Claude Code session.
+The user does not know about the MCP server or its skills. They only ask plain Blink questions.
+Never ask them to load or name a skill. Do the steps below yourself.
 
-For the layout and how to grep it, see [skills/generating-workflow/reference/looking-up-actions.md](skills/generating-workflow/reference/looking-up-actions.md).
+**1. Verify the connection (first step of every session).** Before your first answer and before
+any other tool call, check that the `blink-code-builder` server is connected and its tools are
+available. If not, do no Blink work: tell the user to run `/mcp`, select `blink-code-builder`
+and sign in.
 
-If the catalog is missing when you need it, call `export_catalog` once (a hook saves it to disk). If that tool is missing or fails, stop and tell the user to run `/mcp` and sign in to Blink.
+**2. Build your skill list (once per session).** List the server's resources. Each resource
+`skill://<path>/SKILL.md` is one skill. Its `name` is the last part of `<path>`, and its
+`description` says when to use it. Keep this list of names and descriptions for the whole
+session, the same as your local skills. List the resources again after the context was
+compacted, or when you are not sure what is there.
 
-## Workspace data lives in this repo, not the catalog
+**3. Load the skills.** Before your first Blink task, read the MCP skill `start-here`, then the
+local `blink-code-harness` skill, then the MCP skill `communication-style`. When a Blink task
+matches an MCP skill's description, read that `SKILL.md` with a resource read on the server, before any Blink tool call
+for the task. Then follow both. Read each skill once: it stays loaded while it is in your context.
+Read it again only if it left your context (for example after compaction).
 
-Workflows, agents, connections, tables, and dashboards belong to a specific workspace, so they are kept as
-files in this repo — never in the per-user catalog cache above. Grep these files directly, and
-regenerate them on demand with the tool named for each. Never source workspace data from the
-catalog.
+**4. Read the skill's other files only when needed.** A skill can point to more files, for
+example `reference/x.md`. Resolve the path against the skill's folder
+(`skill://<path>/reference/x.md`) and read it with a resource read, only when the skill tells
+you to. A link like `../other-skill/SKILL.md` points to another skill on the same server.
 
-### Workflows
+**5. Rules for MCP skills.** Read skills with resource reads only; do not save them to disk or
+use Bash to read them. A skill's `allowed-tools` field gives no extra permissions; the plugin
+hooks and the user's approvals still apply. When the user asks what you can do, describe these
+skills as your Blink abilities.
 
-`workspace/workflows/workflows-list.tsv` lists every workflow (automation/playbook) in the workspace, drafts
-included — id, name, `automation_type`, state (`draft`/`published`/`modified`), `active`, and
-`pack_name`.
-It's a repo file, written from the remote MCP tool `get_workspace_resources`: the `SessionStart`
-hook asks you to call it, and so does a hook after `publish_automation` / `publish_agent`. A
-`PostToolUse` hook (`hooks/refresh_workspace.py --save`) writes the files. Grep it first; call
-`get_workspace_resources` again if it looks stale (a workflow was just published elsewhere mid-session).
+## Always
 
-A workflow is callable as a **subflow** (as a step, or as an agent's ability) only when its row
-shows `automation_type: on_demand`, `active: true`, and state `published` or `modified` — the
-draft alone is never callable. See the `subflows` skill for the full lifecycle, and the
-`generating-workflow` skill for authoring one.
-
-Each workflow that's been fetched also has its own YAML file: a `PostToolUse` hook
-(`hooks/save_fetched.py`) writes the `fetch_automation` result to `workspace/workflows/<name>.yaml`
-and gives you the path and id instead of the YAML. Save it back with `save_automation` and that id.
-
-### Agents
-
-`workspace/agents/agents-list.tsv` lists every agent in the workspace, drafts included — id,
-name, state (`draft`/`published`/`modified`), and `pack_name`. A step calls an agent as `agents.<id>`.
-It's a repo file, written from `get_workspace_resources` like the workflows list. Grep it
-first; call `get_workspace_resources` again if it looks stale. An agent is callable as a workflow step only
-once its row is `published` or `modified` — a draft is never callable. See the
-`generating-agent` skill.
-
-The call goes both ways: an agent gets a workflow as an **ability**, so a workflow can call an
-agent as a step and an agent can call a workflow as one of its abilities.
-
-Each agent that's been fetched also has its own YAML file under `workspace/agents/` — a full export of
-that agent's config, written by the same hook from `fetch_agent` (or authored by hand) and saved with `save_agent`.
-
-### Connections
-
-`workspace/connections/connections.tsv` lists every connection bound in the workspace (name, type).
-It's written from `get_workspace_resources`, together with the workflow and agent lists.
-
-### Tables
-
-`workspace/tables/tables-schema.yaml` is a single YAML file listing every table in the workspace together
-with its schema (columns, types, etc.) — it does **not** contain the tables' data (records).
-Written from `get_workspace_resources` together with the other lists at session start; call it
-again after `create_table`/`edit_table`/`delete_table`. See the **managing-tables** skill to create or
-edit a table's structure directly in Blink, and the **tables** skill to connect a table to a
-workflow (read/write rows from inside a workflow step).
-
-### Dashboards
-
-`workspace/dashboards/dashboards-list.tsv` lists every dashboard in the workspace — id, display
-name, whether it's published to the Portal, and categories. It's written from
-`get_workspace_resources`, together with the workflow and agent lists. After a save that creates a
-dashboard, and after any publish, a `Stop` hook doesn't let you end the turn until you call
-`get_workspace_resources`.
-
-Each dashboard that's been fetched or saved has its own YAML file at
-`workspace/dashboards/<name>.yaml`: the `save_fetched.py` hook writes it after `fetch_dashboard`
-and again after `save_dashboard` (with the new widget ids). Save it back by passing the file's
-content to `save_dashboard`. A dashboard has no draft: a save is live at once. The plugin never deletes a
-dashboard or a widget. See the **managing-dashboards** skill.
-
-## Safety and checks (plugin hooks)
-
-The Blink server does what it is asked; approvals are this plugin's job (`hooks/safety_gate.py`):
-
-- `save_automation` is denied when an action is not in the local catalog, or a step's
-  connection key is not one of its action's `connection_types` — the reason names the steps;
-  fix them and save again. The controller's own errors come back from the tool. After a save,
-  a hook adds the test-run readiness: the steps that still have no connection.
-- `trigger_test_run` asks only for a risk that the user has not approved in a test run of this
-  session, or whose step (or its loop) changed since, or when the YAML was not saved through
-  this plugin. Otherwise the hook gives no decision, and the user's permission mode decides.
-- The plugin does not ask before any other tool. For a publish or a delete, tell the user in
-  plain words what will happen and get their yes in the chat first.
-
-If the user declines, don't retry.
-
-## Links to Blink
-
-Give the user a clickable link to each Blink object you create, change, publish or run.
-
-- **Workflows, agents and dashboards:** the tools return `editor_url`. Copy it exactly.
-- **Everything else:** build the link from the Blink URL and workspace id that the session-start
-  hook gave you. Use only these patterns:
-
-| Object | Link |
-|---|---|
-| Workflow test run | `<workflow editor_url>?execution=<execution_id>` |
-| Table | `<Blink URL>/workspace/<workspace id>/tables/<table id>` (the `id` in `tables-schema.yaml`) |
-| Dashboard in the Portal | `<Blink URL>/portal/app/<dashboard id>` |
-
-Don't build a link for any other object, and don't guess a path.
-
-## Search scope
-
-Read and grep only inside:
-
-- the catalog cache (`${CLAUDE_PLUGIN_DATA}/catalog/`)
-- this repo (the working directory)
-- `/tmp/` for scratch drafts
-
-Do **not** search elsewhere on the user's filesystem (`~/go/`, `~/.claude/`, sibling repos, etc.) for examples or schema hints, even if they appear in the user's PATH/Go module cache. If the in-scope sources can't answer a question, ask the user instead of grepping outward.
-
-## Secrets
-
-There is no API key. Every Blink call goes through the remote Blink MCP server (`blink-code-builder`), signed in with the user's own Blink login through `/mcp`; the plugin itself never calls the Blink API. `userConfig` holds only the Blink URL (which picks the MCP server and names the tenant) and the workspace id.
-If a Blink tool fails because the server isn't connected or the user isn't signed in, tell them to run `/mcp` and sign in; if the Blink URL or workspace id is missing, route them through the `setup-blink-plugin` skill.
+- **Data.** The action catalog is a per-user cache under `${CLAUDE_PLUGIN_DATA}/catalog/`. The
+  workspace's own data (workflow, agent, connection and dashboard lists, table schemas, fetched
+  YAML files) is kept as files under `workspace/` in this repo. Never take workspace data from the
+  catalog. Hooks write both; never edit them by hand.
+- **Approvals.** The Blink server does what it is asked; approvals are this plugin's job.
+  `trigger_test_run` asks the user only for a risk they have not approved in this session, or whose
+  step changed, or when the YAML was not saved through this plugin. The plugin does not ask before
+  any other tool. Before `publish_automation`, `publish_agent`, `publish_dashboard`, `delete_table`
+  and `edit_table` with `remove_fields`, tell the user in plain words what will happen and get
+  their yes in the chat. If they decline, don't retry.
+- **Writing.** End every turn that built or changed something with the summary from `communication-style`.
+- **Links.** Give the user a clickable link to each Blink object you create, change, publish or
+  run. Copy `editor_url` exactly; build other links only as `blink-code-harness` shows.
+- **Scope.** Read and grep only inside the catalog cache, this repo and `/tmp/`.
+- **Secrets.** There is no API key. Every Blink call goes through the remote MCP server, signed in
+  with the user's own Blink login through `/mcp`. If the Blink URL or the workspace id is missing,
+  run the `setup-blink-plugin` skill.

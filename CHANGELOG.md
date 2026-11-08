@@ -7,6 +7,13 @@ when this version increases, so increase it in each PR that changes the plugin.
 Versions use [semver](https://semver.org/): patch for bug fixes, minor for new features, major
 for breaking changes.
 
+## 1.0.0
+
+- Breaking change: the skills for workflows, agents, subflows, tables and dashboards now come from the Blink MCP server, not from the plugin. Claude lists the skills of the MCP server and reads the ones that match your request. Blink Solution Builder and other Blink products use the same skills.
+- The plugin keeps two local skills: `blink-code-harness` (where the files are and how the tools and hooks work in Claude Code) and `setup-blink-plugin`.
+- At the first message of a session, the plugin reminds Claude to list the MCP skills.
+- This version works only with a Blink MCP server that has skills support. Update the plugin and sign in again with `/mcp`.
+
 ## 0.5.1
 
 - Fewer approval prompts. Claude Code asks before a test run only when the workflow has a risky step that you did not approve in a test run of this session, or that changed since. The prompt lists only those steps.
