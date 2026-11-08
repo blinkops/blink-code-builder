@@ -34,8 +34,18 @@ def needs_sign_in():
         return False
 
 
+def first_message(session_id):
+    """True once per session: marks the session in the plugin data dir."""
+    marker = catalog_root().parent / "sessions" / session_id
+    if not session_id or marker.exists():
+        return False
+    marker.parent.mkdir(parents=True, exist_ok=True)
+    marker.touch()
+    return True
+
+
 def main():
-    json.load(sys.stdin)  # the hook payload; nothing in it is needed
+    payload = json.load(sys.stdin)
     workspace_id = os.environ.get(ENV_WORKSPACE, "")
     if not workspace_id or registered_config() is None:
         return  # not set up or not registered yet: the SessionStart hooks show those steps
@@ -56,10 +66,19 @@ def main():
         steps.append("call the Blink MCP tool `export_catalog` once")
     if not all((project / name).exists() for name in LISTS):
         steps.append(f"call the Blink MCP tool `get_workspace_resources` with workspace_id={workspace_id}")
+    skills = ""
+    if first_message(payload.get("session_id", "")):
+        skills = ("The Blink MCP server serves skills as `skill://<name>/SKILL.md` resources. Before you answer, "
+                  "list the resources of the blink-code-builder MCP server. Treat each `SKILL.md` as a skill you "
+                  "have: read the ones whose description matches the user's request, and read a skill's other "
+                  "files only when it points you to them. Also load the local `blink-code-harness` skill: it says "
+                  "where the files are and how the tools and hooks work here. ")
+    if skills and not steps:
+        print(json.dumps({"hookSpecificOutput": {"hookEventName": "UserPromptSubmit", "additionalContext": skills}}))
     if steps:
         print(json.dumps({"systemMessage": "Blink: downloading the action catalog and workspace lists…",
                           "hookSpecificOutput": {"hookEventName": "UserPromptSubmit", "additionalContext": (
-                              "Blink data is missing. Before you answer, " + " and ".join(steps) + ". Hooks save the "
+                              skills + "Blink data is missing. Before you answer, " + " and ".join(steps) + ". Hooks save the "
                               "results; don't read or summarize them.")}}))
 
 
