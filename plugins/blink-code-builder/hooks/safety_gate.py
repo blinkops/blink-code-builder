@@ -355,7 +355,7 @@ def post(payload):
                               "approved": approved})
         if missing := steps_without_connection(yaml_text):
             readiness = ("Test run readiness: BLOCKED. These steps have no connection; pick one from "
-                         "workspace/connections/connections.tsv or ask the user:\n" + "\n".join(f"- {m}" for m in missing))
+                         "connections/connections.tsv in the workspace folder, or ask the user:\n" + "\n".join(f"- {m}" for m in missing))
         else:
             readiness = "Test run readiness: READY."
         print(json.dumps({"hookSpecificOutput": {"hookEventName": "PostToolUse", "additionalContext": readiness}}))

@@ -7,7 +7,11 @@ the Blink MCP server, so this can see what the SessionStart hooks couldn't:
 - The server needs sign-in: tell the user exactly how to sign in. Claude Code keeps servers
   that need sign-in in `mcp-needs-auth-cache.json` (an internal file, so a missing file just
   means "no hint").
-- The catalog (missing or 7+ days old) or the workspace lists are missing: tell Claude to fetch them before answering.
+- The catalog (missing or 7+ days old) or the lists of the session's workspace are missing: tell Claude to
+  fetch them before answering. With no workspace chosen yet, the lists wait for the picker.
+
+- The server is not registered yet (the message is in the session that installed the plugin, so
+  the SessionStart hooks did not run): register it now, so one restart is enough.
 
 Otherwise it prints nothing. Reads only local files.
 """
@@ -18,9 +22,10 @@ import sys
 import time
 from pathlib import Path
 
-import _common  # noqa: F401 — puts the plugin root on sys.path for blink_shared
-from blink_shared.config import ENV_WORKSPACE, catalog_root
+from _common import active_workspace, project_dir, workspace_folder  # also puts the plugin root on sys.path
+from blink_shared.config import catalog_root
 from refresh_catalog import STALE_DAYS
+import register_mcp
 from register_mcp import SERVER_NAME, registered_config
 
 LISTS = ("workflows/workflows-list.tsv", "agents/agents-list.tsv", "connections/connections.tsv")
@@ -46,9 +51,12 @@ def first_message(session_id):
 
 def main():
     payload = json.load(sys.stdin)
-    workspace_id = os.environ.get(ENV_WORKSPACE, "")
-    if not workspace_id or registered_config() is None:
-        return  # not set up or not registered yet: the SessionStart hooks show those steps
+    if registered_config() is None:
+        try:
+            register_mcp.main("UserPromptSubmit")  # does nothing until the Blink URL is set
+        except Exception as exc:
+            register_mcp.report(f"Blink MCP: setup failed: {exc}", "UserPromptSubmit")
+        return
 
     if needs_sign_in():
         message = ("Blink: sign in to finish setup. Run /mcp, select blink-code-builder, choose Authenticate "
@@ -59,13 +67,14 @@ def main():
                 "help, run the setup-blink-plugin skill."}}))
         return
 
-    project = Path(os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd()) / "workspace"
+    workspace = active_workspace(payload.get("session_id"))
     steps = []
     sentinel = catalog_root() / "actions.tsv"
     if not sentinel.exists() or time.time() - sentinel.stat().st_mtime > STALE_DAYS * 24 * 60 * 60:
         steps.append("call the Blink MCP tool `export_catalog` once")
-    if not all((project / name).exists() for name in LISTS):
-        steps.append(f"call the Blink MCP tool `get_workspace_resources` with workspace_id={workspace_id}")
+    folder = workspace and project_dir() / workspace_folder(workspace["id"])
+    if folder and not all((folder / name).exists() for name in LISTS):
+        steps.append(f'call the Blink MCP tool `get_workspace_resources` with workspace_id="{workspace["id"]}"')
     skills = ""
     if first_message(payload.get("session_id", "")):
         skills = ("The Blink MCP server serves skills as `skill://<name>/SKILL.md` resources. Before you answer, "

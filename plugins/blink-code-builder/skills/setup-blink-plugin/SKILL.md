@@ -1,7 +1,7 @@
 ---
 name: setup-blink-plugin
 description: Sets up and repairs the blink-code-builder plugin — checks python3, the plugin config values, the Blink MCP server and sign-in (/mcp), the action catalog and the workspace lists, and fixes whatever is missing. Use when the user asks to install, set up or configure the plugin, when a Blink hook message says setup is incomplete, when the Blink tools are missing or fail to connect, when a hook fails with `python3: command not found`, or when the catalog or workspace lists are missing.
-allowed-tools: Read, Bash, mcp__blink-code-builder__get_workspace_resources, mcp__blink-code-builder__export_catalog
+allowed-tools: Read, Bash, mcp__blink-code-builder__list_workspaces, mcp__blink-code-builder__get_workspace_resources, mcp__blink-code-builder__export_catalog
 user-invocable: false
 ---
 
@@ -21,7 +21,7 @@ then the `eval ... brew shellenv` lines it prints, then `brew install python`. I
 
 ## 2. userConfig values
 
-The plugin needs three values, all entered through Claude Code's plugin menu. **Don't write to `~/.claude/settings.json` yourself** — even for non-sensitive values like URL and workspace ID. The `/plugin` menu is the canonical config path; bypassing it isn't your call.
+The plugin needs the Blink URL, and takes an optional default workspace. Both are all entered through Claude Code's plugin menu. **Don't write to `~/.claude/settings.json` yourself** — even for non-sensitive values like URL and workspace ID. The `/plugin` menu is the canonical config path; bypassing it isn't your call.
 
 Walk the user through reaching the menu:
 
@@ -33,7 +33,7 @@ Walk the user through reaching the menu:
 Then guide them field-by-field. If they already gave you values in their original message (e.g. their Blink URL), tell them what to type in the field — don't re-ask. They paste / type each value into the menu themselves; nothing goes through chat.
 
 - **Blink URL** — Their Blink domain (whatever URL they sign in at, e.g. `https://acme.app.blinkops.com`). It picks the Blink MCP server for their environment and names their tenant, so it must be their own tenant's URL.
-- **Blink workspace ID** — Visible in their browser URL inside Blink: in `https://<blink>/workspace/<uuid>/...` the UUID after `/workspace/` is the workspace ID. Tell them to copy that UUID into the field.
+- **Default Blink workspace ID (optional)** — Leave it empty to pick a workspace from a list in each session. To start every session in one workspace, copy the UUID after `/workspace/` in the Blink browser URL (`https://<blink>/workspace/<uuid>/...`) into the field.
 
 Claude Code does **not** re-prompt for missing required values automatically. If they skipped any at install time, this same `/plugin → Installed → Configure options` flow is how they fix it.
 
@@ -44,7 +44,7 @@ The plugin acts as the user who signs in through `/mcp`, and Blink permissions h
 - **Company role** (account-wide): **Admin** — everything; **Builder** — can create workspaces and use the portal, but carries **no workflow permissions by itself**; **Consumer** / **Tenant Guest** — portal/view only, not usable for this plugin.
 - **Workspace role** (per workspace): **Owner** / **Contributor** — view, edit, test-run, and publish workflows; **Viewer** — can list workflows but can't save or run anything.
 
-For this plugin the user must be a member of the target workspace with **Contributor or above**. A common trap: a service user with only the company "Builder" role gets `403 Forbidden` even on listing workflows (`/automations`) — the fix is a Blink admin adding that user to the workspace.
+For this plugin the user must be a member of the session's workspace with **Contributor or above**. A common trap: a service user with only the company "Builder" role gets `403 Forbidden` even on listing workflows (`/automations`) — the fix is a Blink admin adding that user to the workspace.
 
 ## 3. Restart the Claude Code session
 
@@ -57,9 +57,9 @@ On the first start with a new Blink URL, the plugin registers its MCP server for
 Go through these in order. Fix an item before moving to the next one.
 
 1. **python3** — `python3 --version` works (step 1). If a hook fails with `python3: command not found`, that's the cause: install it (step 1), then ask the user to restart Claude Code.
-2. **Config** — only print `set`/`unset` for `CLAUDE_PLUGIN_OPTION_BLINK_{CONTROLLER_URL,WORKSPACE_ID}`, **never the values**. Anything required that's `unset` → step 2.
+2. **Config** — only print `set`/`unset` for `CLAUDE_PLUGIN_OPTION_BLINK_{CONTROLLER_URL,WORKSPACE_ID}`, **never the values**. If `CONTROLLER_URL` is `unset` → step 2. `WORKSPACE_ID` is optional.
 3. **MCP server** — check `/mcp`: `blink-code-builder` must be connected. Not listed → the plugin registers it at session start, so ask the user to restart Claude Code once (step 3). `needs authentication` → the user runs `/mcp`, selects **blink-code-builder**, chooses **Authenticate**, signs in with their Blink login, then sends any message.
-4. **Workspace lists** — `workspace/workflows/workflows-list.tsv`, `workspace/agents/agents-list.tsv`, `workspace/connections/connections.tsv` and `workspace/tables/tables-schema.yaml` exist in the project. Missing → call `get_workspace_resources` with the configured workspace id; a hook saves the files.
+4. **Workspace lists** — `workflows/workflows-list.tsv`, `agents/agents-list.tsv`, `connections/connections.tsv` and `tables/tables-schema.yaml` exist in the session's workspace folder, `workspace/<name>--<short id>/`. The user's workspaces are in `workspace/workspaces.tsv`. No workspace chosen → call `list_workspaces` with `choose=true`. Missing → call `get_workspace_resources` with `workspace_id="active"`; a hook saves the files.
 5. **Catalog** — `${CLAUDE_PLUGIN_DATA}/catalog/` has `actions/`, `triggers/`, `actions.tsv` and `triggers.tsv`, and `actions.tsv` has a few thousand lines. Missing → call `export_catalog` once; a hook saves it.
 
 If a save hook replies with an `error:` line, show it to the user.

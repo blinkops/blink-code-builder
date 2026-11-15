@@ -15,11 +15,24 @@ for harness facts; the MCP skill wins for Blink facts.
 The remote Blink MCP server `blink-code-builder` gives the tools as
 `mcp__blink-code-builder__<tool>`. The skills name them by `<tool>` only.
 
-- Every tool that takes a `workspace_id` gets the workspace id that the session-start hook gave
-  you.
+- **The workspace.** Each session works in one Blink workspace: the default in the plugin config,
+  or the one the user picks. Pass its id as `workspace_id` to every tool that takes one: the
+  session start note and the picker result give the id. A hook denies any other id, and its
+  denial gives the right one.
+- **The picker.** If no workspace is chosen yet, before your first Blink tool call, call
+  `list_workspaces` with `choose=true`. Claude Code shows the user a picker, and the hook saves the
+  user's choice. Also call it when the user asks for another workspace ("switch to prod", "copy
+  this workflow to SOC-Prod"). Before a switch, tell the user which changes are not saved yet.
+  After the switch, every tool call goes to the new workspace until the user picks again.
+- If `list_workspaces` with `choose=true` says "No workspace was chosen", ask the user with
+  AskUserQuestion as the result says (header "Workspace", labels "<name> · <role> · <first 8 of the
+  id>"). A hook saves the user's answer as the workspace. Never choose the workspace yourself.
+- `list_workspaces` without `choose` lists the user's workspaces (`id`, `name`, `role`, `description`), for
+  questions such as "which workspaces do I have?". The hook saves the list as `workspace/workspaces.tsv`.
+  The list does not change the workspace. To find a workspace by name, read `workspace/workspaces.tsv`.
 - If a tool fails because the server isn't connected or the user isn't signed in, tell the user:
   run `/mcp`, select `blink-code-builder`, choose Authenticate and sign in to Blink. If the Blink
-  URL or the workspace id is missing, run the `setup-blink-plugin` skill.
+  URL is missing, run the `setup-blink-plugin` skill.
 - There is no API key. Never call the Blink API with curl or httpx, and never read `.env` files.
 
 ## Where things are
@@ -30,17 +43,19 @@ The remote Blink MCP server `blink-code-builder` gives the tools as
 | Action index | `${CLAUDE_PLUGIN_DATA}/catalog/actions.tsv` — `full_name` ⇥ service ⇥ description ⇥ `connection_types` |
 | Trigger index | `${CLAUDE_PLUGIN_DATA}/catalog/triggers.tsv` — same shape |
 | Action / trigger detail entry | `${CLAUDE_PLUGIN_DATA}/catalog/actions/<service>/<name>.json`, `.../triggers/<service>/<name>.json` (built-in triggers without a service are under `_misc/`) |
-| Workflow list | `workspace/workflows/workflows-list.tsv` — `id` ⇥ `name` ⇥ `automation_type` ⇥ `state` ⇥ `active` ⇥ `pack_name` |
-| Agent list | `workspace/agents/agents-list.tsv` — `id` ⇥ `name` (with ` \| <title>` when the agent has one) ⇥ `state` ⇥ `pack_name` |
-| Connection list | `workspace/connections/connections.tsv` — `name` ⇥ `type_name` |
-| Table schemas | `workspace/tables/tables-schema.yaml` — every table's columns, no rows |
-| Dashboard list | `workspace/dashboards/dashboards-list.tsv` — `id` ⇥ `display_name` ⇥ `published_to_portal` ⇥ `categories` |
-| Local workflow file | `workspace/workflows/<name, lowercase, dashes>.yaml` |
-| Local agent file | `workspace/agents/<name, lowercase, dashes>.yaml` |
-| Local dashboard file | `workspace/dashboards/<display name, lowercase, dashes>.yaml` |
+| Workspace list | `workspace/workspaces.tsv` — `id` ⇥ `name` ⇥ `role` ⇥ `description`: the workspaces of the user. A hook writes it after every `list_workspaces` call. |
+| Workspace folder | `workspace/<name>--<first 8 of the id>/` — one folder for each workspace; the hooks name it. All the paths below are in it. |
+| Workflow list | `workflows/workflows-list.tsv` — `id` ⇥ `name` ⇥ `automation_type` ⇥ `state` ⇥ `active` ⇥ `pack_name` |
+| Agent list | `agents/agents-list.tsv` — `id` ⇥ `name` (with ` \| <title>` when the agent has one) ⇥ `state` ⇥ `pack_name` |
+| Connection list | `connections/connections.tsv` — `name` ⇥ `type_name` |
+| Table schemas | `tables/tables-schema.yaml` — every table's columns, no rows |
+| Dashboard list | `dashboards/dashboards-list.tsv` — `id` ⇥ `display_name` ⇥ `published_to_portal` ⇥ `categories` |
+| Local workflow file | `workflows/<name, lowercase, dashes>.yaml` |
+| Local agent file | `agents/<name, lowercase, dashes>.yaml` |
+| Local dashboard file | `dashboards/<display name, lowercase, dashes>.yaml` |
 | Scratch draft | `/tmp/<name>.yaml` |
 
-The `workspace/` paths are relative to the user's project (the working directory). They are repo
+The workspace folder is relative to the user's project (the working directory). Its files are repo
 files: the user reviews your changes with `git diff`, so don't echo YAML bodies in chat.
 
 ## Searching the catalog
@@ -61,7 +76,7 @@ cd "${CLAUDE_PLUGIN_DATA}/catalog" && tail -n +1 actions/slack/send_message.json
 ```
 
 To find the built-ins, grep the index or list `actions/internal/` and `actions/core/`.
-To find prior use of an action in the workspace: `grep -rn 'action: <full_name>' workspace/workflows/`.
+To find prior use of an action in the workspace: `grep -rn 'action: <full_name>' workspace/*/workflows/`.
 
 The catalog and the workspace lists are written by hooks. Never edit them by hand.
 
@@ -73,7 +88,9 @@ A hook can't call an MCP tool, so some hooks ask you to call one and others proc
 |---|---|---|
 | Session start | `register_mcp.py` | Registers the MCP server that matches the user's Blink URL. |
 | Session start | `refresh_catalog.py` | If the catalog is missing or 7+ days old, asks you to call `export_catalog`. |
-| Session start | `refresh_workspace.py` | Asks you to call `get_workspace_resources` and gives you the workspace id. |
+| Session start | `refresh_workspace.py` | Names the session's workspace and asks you to call `get_workspace_resources`. With no workspace yet, asks you to show the picker before your first Blink tool call. |
+| Before every Blink tool | `active_workspace.py check` | Denies the call if `workspace_id` is not the session's workspace, and gives the right id. With no workspace yet, it denies the call: show the picker. |
+| After `list_workspaces` | `active_workspace.py list` | Saves the list as `workspace/workspaces.tsv`. After `choose=true`, it also saves the user's choice as the session's workspace and asks you to call `get_workspace_resources`. |
 | Every user message | `check_setup.py` | Tells the user how to sign in, or asks you to fetch missing data first. |
 | After `export_catalog` | `refresh_catalog.py --save` | Unzips the catalog to disk. You see a one-line status. |
 | After `get_workspace_resources` | `refresh_workspace.py --save` | Writes the workspace lists and the table schemas. You see a one-line status. |
@@ -98,7 +115,7 @@ To force a catalog refresh, the user deletes the catalog folder and starts a new
   rewrites the file with the new ids.
 - **`fetch_automation` / `fetch_agent` / `fetch_dashboard`** — the hook writes the local file and
   returns its path and id. Read the file.
-- **`export_catalog` / `get_workspace_resources`** — call them when a hook asks, or when the
+- **`export_catalog` / `get_workspace_resources` / `list_workspaces`** — call them when a hook asks, or when the
   catalog or a list is missing or stale. They run without a permission prompt.
 
 ## Asking the user and approvals
@@ -124,7 +141,7 @@ Give the user a clickable link to each Blink object you create, change, publish 
 - A table: `<Blink URL>/workspace/<workspace id>/tables/<table id>` (`id` in `tables-schema.yaml`).
 - A dashboard in the Portal: `<Blink URL>/portal/app/<dashboard id>`.
 
-Take the Blink URL and the workspace id from the session-start hook. Don't build any other link.
+Take the Blink URL and the workspace id from the session-start hook, or from the picker result. Don't build any other link.
 
 ## Helpers and search scope
 
