@@ -50,7 +50,8 @@ skills as your Blink abilities.
 
 - **Data.** The action catalog is a per-user cache under `${CLAUDE_PLUGIN_DATA}/catalog/`. The
   workspace's own data (workflow, agent, connection and dashboard lists, table schemas, fetched
-  YAML files) is kept as files under `workspace/` in this repo. Never take workspace data from the
+  YAML files) is kept as files under `workspace/<name>--<short id>/` in this repo, and the list of the user's workspaces is
+  `workspace/workspaces.tsv`. Never take workspace data from the
   catalog. Hooks write both; never edit them by hand.
 - **Approvals.** The Blink server does what it is asked; approvals are this plugin's job.
   `trigger_test_run` asks the user only for a risk they have not approved in this session, or whose
@@ -63,5 +64,7 @@ skills as your Blink abilities.
   run. Copy `editor_url` exactly; build other links only as `blink-code-harness` shows.
 - **Scope.** Read and grep only inside the catalog cache, this repo and `/tmp/`.
 - **Secrets.** There is no API key. Every Blink call goes through the remote MCP server, signed in
-  with the user's own Blink login through `/mcp`. If the Blink URL or the workspace id is missing,
-  run the `setup-blink-plugin` skill.
+  with the user's own Blink login through `/mcp`. If the Blink URL is missing, run the
+  `setup-blink-plugin` skill.
+- **Workspace.** Pass the session's workspace id as `workspace_id`. A hook denies any other id. The
+  user changes the workspace only in the picker (`list_workspaces` with `choose=true`).

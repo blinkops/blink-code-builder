@@ -20,6 +20,15 @@
     ],
     "PreToolUse": [
       {
+        "matcher": "mcp__blink-code-builder__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/active_workspace.py\" check"
+          }
+        ]
+      },
+      {
         "matcher": "mcp__blink-code-builder__(save_automation|trigger_test_run)",
         "hooks": [
           {
@@ -29,16 +38,34 @@
         ]
       },
       {
-        "matcher": "mcp__blink-code-builder__export_catalog|mcp__blink-code-builder__get_workspace_resources",
+        "matcher": "mcp__blink-code-builder__(export_catalog|get_workspace_resources|list_workspaces)",
         "hooks": [
           {
             "type": "command",
-            "command": "echo '{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"permissionDecision\": \"allow\", \"permissionDecisionReason\": \"Read-only setup fetch of the action catalog and the workspace lists.\"}}'"
+            "command": "echo '{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"permissionDecision\": \"allow\", \"permissionDecisionReason\": \"Read-only fetch of the action catalog, the workspace lists or the workspaces of the user.\"}}'"
           }
         ]
       }
     ],
     "PostToolUse": [
+      {
+        "matcher": "mcp__blink-code-builder__list_workspaces",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/active_workspace.py\" list"
+          }
+        ]
+      },
+      {
+        "matcher": "AskUserQuestion",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/active_workspace.py\" answer"
+          }
+        ]
+      },
       {
         "matcher": "mcp__blink-code-builder__(save_automation|trigger_test_run)",
         "hooks": [

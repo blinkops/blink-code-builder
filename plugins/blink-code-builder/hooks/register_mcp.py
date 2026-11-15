@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Connect the remote Blink MCP server that matches the user's Blink URL.
 
-SessionStart hook. Each Blink environment has its own blinkmcp server on AgentCore, with
+SessionStart hook, and called by check_setup.py on the first message after the plugin was
+installed (the SessionStart hooks of a new plugin don't run in its install session), so the
+server is ready from the second session on. Each Blink environment has its own blinkmcp server on AgentCore, with
 its own Cognito pool, and .mcp.json can't choose between them. So this hook splits the
 configured Blink URL into tenant subdomain + environment domain
 (acme.eu1.blinkops.com -> acme + eu1.blinkops.com), looks the domain up in ../mcp-servers.json,
@@ -131,18 +133,18 @@ def register(config):
         raise RuntimeError((result.stderr or result.stdout).strip())
 
 
-def report(message):
+def report(message, event="SessionStart"):
     """Show the message to the user and give it to Claude as context."""
     print(json.dumps({
         "systemMessage": message,
-        "hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": (
+        "hookSpecificOutput": {"hookEventName": event, "additionalContext": (
             message + " The Blink MCP server isn't connected in this session, so skip the other Blink "
             "instructions (catalog, workspace lists) until the next session, and if the user asks about "
             "Blink, tell them to restart Claude Code.")},
     }))
 
 
-def main():
+def main(event="SessionStart"):
     blink_url = os.environ.get(ENV_CONTROLLER, "")
     if not blink_url:
         return  # not configured yet: the setup-blink-plugin skill handles that
@@ -162,10 +164,10 @@ def main():
     try:
         register(wanted)
     except Exception as exc:
-        report(f"Blink MCP: could not add the server for {name}: {exc}")
+        report(f"Blink MCP: could not add the server for {name}: {exc}", event)
         return
-    report(f"Blink MCP: added the server for {name} ({host}). Start a new session, then run /mcp and "
-           f"sign in to Blink.{fallback}")
+    report(f"Blink MCP: added the server for {name} ({host}). Restart Claude Code one time, then run /mcp and "
+           f"sign in to Blink.{fallback}", event)
 
 
 if __name__ == "__main__":

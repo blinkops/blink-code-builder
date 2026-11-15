@@ -1,6 +1,6 @@
 {
   "name": "blink-code-builder",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Authors Blink automations as YAML from natural-language prompts, validates them against your workspace's action catalog, and saves them as drafts in your Blink workspace. Talks to Blink through the remote Blink MCP server, signed in with your own Blink login.",
   "author": {
     "name": "BlinkOps Inc."
@@ -17,9 +17,9 @@
     },
     "blink_workspace_id": {
       "type": "string",
-      "title": "Blink workspace ID",
-      "description": "Target blink workspace ID (UUID)",
-      "required": true
+      "title": "Default Blink workspace ID (optional)",
+      "description": "Leave empty to choose a workspace from a list in each session. Set a workspace ID (UUID) to start every session in it.",
+      "required": false
     }
   }
 }

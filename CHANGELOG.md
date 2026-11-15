@@ -7,6 +7,16 @@ when this version increases, so increase it in each PR that changes the plugin.
 Versions use [semver](https://semver.org/): patch for bug fixes, minor for new features, major
 for breaking changes.
 
+## 1.1.0
+
+- Each Claude Code session has its own Blink workspace. At the start of a session, Claude shows a list of your workspaces, and you choose one. If the list does not open, Claude asks you with a question box.
+- To change the workspace, ask Claude to switch workspace.
+- Every Blink tool call goes to the workspace of the session. Only you change it.
+- The files of each workspace are in `workspace/<name>--<id>/`. The list of your workspaces is in `workspace/workspaces.tsv`.
+- The setting "Default Blink workspace ID" is now optional. Set it to start every session in one workspace.
+- Setup takes two sessions, not three.
+- Needs the Blink MCP server with the `list_workspaces` tool. Update the plugin after the server update.
+
 ## 1.0.0
 
 - Breaking change: the skills for workflows, agents, subflows, tables and dashboards now come from the Blink MCP server, not from the plugin. Claude lists the skills of the MCP server and reads the ones that match your request. Blink Solution Builder and other Blink products use the same skills.
