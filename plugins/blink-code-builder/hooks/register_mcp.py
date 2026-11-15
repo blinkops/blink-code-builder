@@ -66,13 +66,16 @@ def blink_host(url: str) -> str:
 def route(blink_url: str) -> Route:
     """Split the Blink URL's host into tenant subdomain + listed environment domain.
 
-    The longest matching domain wins. A host on no listed domain gets the default
-    environment and its first label as the subdomain.
+    The longest matching domain wins. A host that is exactly a listed domain is a tenant on
+    the bare domain (https://app.blinkops.com): it has no subdomain (""). A host on no listed
+    domain gets the default environment and its first label as the subdomain.
     """
     host = blink_host(blink_url)
     mapping = json.loads(MAPPING_PATH.read_text())
     environments = [Environment(**entry) for entry in mapping["environments"]]
     for environment in sorted(environments, key=lambda env: len(env.domain), reverse=True):
+        if host == environment.domain:
+            return Route(environment, "", matched=True)
         suffix = "." + environment.domain
         if host.endswith(suffix) and len(host) > len(suffix):
             return Route(environment, host[: -len(suffix)], matched=True)
@@ -83,10 +86,9 @@ def route(blink_url: str) -> Route:
 
 
 def server_config(target: Route) -> dict:
-    return {
+    config = {
         "type": "http",
         "url": target.environment.url,
-        "headers": {SUBDOMAIN_HEADER: target.subdomain},
         "oauth": {
             "clientId": target.environment.client_id,
             "callbackPort": OAUTH_CALLBACK_PORT,
@@ -95,6 +97,10 @@ def server_config(target: Route) -> dict:
         },
         "timeout": TOOL_TIMEOUT_MS,
     }
+    # A tenant on the bare domain has no subdomain, so the server gets no header.
+    if target.subdomain:
+        config["headers"] = {SUBDOMAIN_HEADER: target.subdomain}
+    return config
 
 
 def registered_config():
@@ -115,7 +121,7 @@ def is_current(registered, wanted):
         registered is not None
         and registered.get("url") == wanted["url"]
         and (registered.get("oauth") or {}).get("clientId") == wanted["oauth"]["clientId"]
-        and registered.get("headers") == wanted["headers"]
+        and (registered.get("headers") or {}) == (wanted.get("headers") or {})
     )
 
 
