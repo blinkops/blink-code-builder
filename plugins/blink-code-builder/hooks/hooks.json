@@ -29,7 +29,7 @@
         ]
       },
       {
-        "matcher": "mcp__blink-code-builder__(save_automation|trigger_test_run)",
+        "matcher": "mcp__blink-code-builder__(save_automation|trigger_test_run|publish_automation)",
         "hooks": [
           {
             "type": "command",

@@ -9,17 +9,23 @@ Modes (argv[1]):
     service is, so likely a typo), or a connection key that is not one of the action's
     connection_types, with the reason, so Claude fixes it (as solution-builder's
     validate-automation.ts does). Actions of services the catalog doesn't have are left alone.
+    Asks when a step has `allow_mock_in_prod: true`: live runs would return its fake output.
   - trigger_test_run: asks, with the risks found in the last saved YAML, only for a risk the
     user has not approved in a test run of this session, or whose step (or its loop) changed
-    since. Otherwise it gives no decision, so the user's permission mode decides.
+    since. Otherwise it gives no decision, so the user's permission mode decides. Mocked steps
+    don't run in a test run, so their risks are left out.
+  - publish_automation: denies when the saved YAML has mocked steps, naming them: live runs
+    ignore mocks, so the mocks must be removed first.
   All other tools get no decision from the plugin: the user's permission mode decides.
 - `post` (PostToolUse):
   - save_automation: records the risks of the saved YAML per id.
-  - save_automation: tells Claude which steps have no connection (test-run readiness).
+  - save_automation: tells Claude which steps have no connection (test-run readiness), and
+    records the mocked steps.
+  - trigger_test_run: tells Claude which steps were mocked, for the run summary.
   - trigger_test_run: records that the risks of the saved YAML are approved for this session
     (per risk, the hash of its step and of the loops around it).
 
-trigger_test_run takes only an id, so the risks come from what this plugin recorded at save time (${CLAUDE_PLUGIN_DATA}/safety/<id>.json). An id saved elsewhere
+trigger_test_run and publish_automation take only an id, so the risks come from what this plugin recorded at save time (${CLAUDE_PLUGIN_DATA}/safety/<id>.json). An id saved elsewhere
 has no record, and the question says so.
 
 Heuristics, not a ban: the user decides. Stdlib only; never fails the call on its own error.
@@ -37,7 +43,7 @@ from typing import Optional
 from _common import catalog_actions, tool_result
 from blink_shared.config import catalog_root
 
-GATED = {"trigger_test_run"}
+GATED = {"trigger_test_run", "publish_automation"}
 
 LOOP_ACTION = "internal.for"
 DESTRUCTIVE = re.compile(
@@ -46,6 +52,8 @@ DESTRUCTIVE = re.compile(
 MESSAGING = re.compile(r"(?i)(send|message|mail|notify|broadcast)")
 BROAD_MENTION = re.compile(r"(?i)<!(here|channel|everyone)>|@(here|channel|everyone)\b")
 HUMAN_WAIT = re.compile(r"(?i)web form response|wait_for_response")
+MOCKED = re.compile(r"(?mi)^\s*(?:-\s+)?mock_output_enabled:\s*[\"']?true\b")
+MOCK_IN_PROD = re.compile(r"(?mi)^\s*(?:-\s+)?allow_mock_in_prod:\s*[\"']?true\b")
 ACTION_LINE = re.compile(r"^(\s*)(?:-\s*)?action:\s*[\"']?([\w.\-]+)")
 ITEM_LINE = re.compile(r"^(\s*)-\s+")
 ID_LINE = re.compile(r"^\s*(?:-\s+)?id:\s*[\"']?([\w.\-]+)")
@@ -73,6 +81,8 @@ class Step:
     step_id: str
     connections: dict
     disabled: bool  # when: false, or a mocked output: the step doesn't run
+    mock_state: str = ""  # the selected mock state when the step is mocked, else empty
+    mock_in_prod: bool = False
 
 
 def state_dir():
@@ -157,12 +167,17 @@ def workflow_risks(yaml_text):
     for block, own, loops in step_blocks(yaml_text):
         action, label = step_action(own), step_id(own) or "?"
         fingerprint = ["\n".join(block)] + ["\n".join(loop) for loop in loops]
+        own_text = "\n".join(own)
+        if MOCKED.search(own_text):
+            # A test run returns the mock and doesn't run the action; publish asks about mocks.
+            if MOCK_IN_PROD.search(own_text):
+                add(f"{label} {action}: allow_mock_in_prod, so live runs return its fake output", *fingerprint)
+            continue
         if DESTRUCTIVE.search(action):
             add(f"{label} {action}: deletes or disables something" + (", once per loop item" if loops else ""),
                 *fingerprint)
         elif loops and MESSAGING.search(action):
             add(f"{label} {action}: sends a message once per loop item", *fingerprint)
-        own_text = "\n".join(own)
         if match := BROAD_MENTION.search(own_text):
             add(f"{label} mentions {match.group(0)}: notifies everyone in the channel", *fingerprint)
         if HUMAN_WAIT.search(own_text):
@@ -230,9 +245,11 @@ def parse_steps(yaml_text):
         for child in mappings:
             if child.parent is mapping and child.parent_key == "connections":
                 connections.update({key: scalar(val) for key, val in child.fields.items()})
-        disabled = (scalar(mapping.fields.get("when")).lower() == "false"
-                    or scalar(mapping.fields.get("mock_output_enabled")).lower() == "true")
-        steps.append(Step(action, scalar(mapping.fields.get("id")), connections, disabled))
+        mocked = scalar(mapping.fields.get("mock_output_enabled")).lower() == "true"
+        disabled = scalar(mapping.fields.get("when")).lower() == "false" or mocked
+        mock_state = (scalar(mapping.fields.get("selected_mock_output_state")) or "completed").lower() if mocked else ""
+        mock_in_prod = mocked and scalar(mapping.fields.get("allow_mock_in_prod")).lower() == "true"
+        steps.append(Step(action, scalar(mapping.fields.get("id")), connections, disabled, mock_state, mock_in_prod))
     return steps
 
 
@@ -288,6 +305,11 @@ def steps_without_connection(yaml_text):
     return missing
 
 
+def mocked_steps(yaml_text):
+    """'S2 (virus-total.GetDomainReport, completed)' for each mocked step."""
+    return [f"{step.step_id} ({step.action}, {step.mock_state})" for step in parse_steps(yaml_text) if step.mock_state]
+
+
 def digest(text):
     return hashlib.sha256(text.encode()).hexdigest()
 
@@ -327,8 +349,12 @@ def approved_note(record, new):
 def pre(payload):
     name, args = tool(payload.get("tool_name", "")), payload.get("tool_input") or {}
     if name == "save_automation":
-        if errors := automation_errors(args.get("yaml") or ""):
+        yaml_text = args.get("yaml") or ""
+        if errors := automation_errors(yaml_text):
             decide("deny", "Not saved. Fix these in the YAML and save again:\n" + "\n".join(f"- {e}" for e in errors))
+        elif in_prod := [step.step_id for step in parse_steps(yaml_text) if step.mock_in_prod]:
+            decide("ask", f"Step(s) {', '.join(in_prod)} have allow_mock_in_prod: true. Live runs (manual, "
+                   "scheduled, event) will return the fake output instead of running the action.")
     elif name == "trigger_test_run":
         record = load_record(args.get("automation_id"))
         if record is None:
@@ -337,6 +363,12 @@ def pre(payload):
             decide("ask", "Runs the saved draft for real, against live systems.\n"
                    + risk_lines({"risks": new}) + approved_note(record, new))
         # No new risks: no decision, so the user's permission mode decides.
+    elif name == "publish_automation":
+        record = load_record(args.get("automation_id")) or {}
+        if mocked := record.get("mocked"):
+            decide("deny", "Not published: these steps are mocked:\n" + "\n".join(f"- {m}" for m in mocked)
+                   + "\nLive runs ignore mocks. Ask the user to remove them (each step needs a working "
+                   "connection), save, test, then publish.")
 
 
 def post(payload):
@@ -352,7 +384,7 @@ def post(payload):
         # Keep the approval: unapproved_risks() compares it with the new fingerprints.
         approved = (load_record(item_id) or {}).get("approved")
         save_record(item_id, {"risks": list(risks), "fingerprints": risks, "sha": digest(yaml_text),
-                              "approved": approved})
+                              "approved": approved, "mocked": mocked_steps(yaml_text)})
         if missing := steps_without_connection(yaml_text):
             readiness = ("Test run readiness: BLOCKED. These steps have no connection; pick one from "
                          "connections/connections.tsv in the workspace folder, or ask the user:\n" + "\n".join(f"- {m}" for m in missing))
@@ -367,6 +399,10 @@ def post(payload):
             # them for this session until their steps change.
             record["approved"] = {"session_id": payload.get("session_id"), "fingerprints": record.get("fingerprints") or {}}
             save_record(item_id, record)
+            if mocked := record.get("mocked"):
+                note = ("Mocked steps in this run returned fake output, not their real action. List them in your "
+                        "summary:\n" + "\n".join(f"- {m}" for m in mocked))
+                print(json.dumps({"hookSpecificOutput": {"hookEventName": "PostToolUse", "additionalContext": note}}))
 
 
 def main():

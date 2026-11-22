@@ -5,8 +5,9 @@ PostToolUse hook on `fetch_automation`, `fetch_agent`, `fetch_dashboard` and `sa
 
 The files go in the folder of the call's workspace, workspace/<name>--<short id>/.
 
-- Automation / agent: the tool returns {id, name, yaml, editor_url}; this writes the YAML to
-  workflows/<name>.yaml or agents/<name>.yaml.
+- Automation / agent: the tool returns {id, name, yaml, editor_url} (an automation also
+  `mocks`); this writes the YAML to workflows/<name>.yaml or agents/<name>.yaml, and keeps
+  the mocks in the status Claude sees.
 - Dashboard: the tool returns {dashboard, editor_url} (plus `data_errors` after a save); this
   writes the dashboard object as YAML to dashboards/<display name>.yaml. After a save
   the file gets the new widget ids, so the next save updates those widgets instead of adding
@@ -43,9 +44,11 @@ def save(tool, result, base):
     folder, save_tool, id_arg = TARGETS[tool]
     relative_path = f"{base}/{folder}/{file_name(result['name'])}.yaml"
     write(relative_path, result["yaml"])
+    mocks = result.get("mocks") or []
+    mock_note = (" Mocked steps return now: " + json.dumps(mocks, ensure_ascii=False)) if mocks else ""
     return (f"ok: wrote {relative_path} (\"{result['name']}\", {id_arg}={result['id']}, editor: "
             f"{result.get('editor_url', '-')}). Read and edit that file, then call {save_tool} with the file's "
-            f"content as `yaml` and {id_arg}={result['id']} so the save updates this one in place.")
+            f"content as `yaml` and {id_arg}={result['id']} so the save updates this one in place." + mock_note)
 
 
 def save_dashboard(tool, result, tool_input, session_id, base):
