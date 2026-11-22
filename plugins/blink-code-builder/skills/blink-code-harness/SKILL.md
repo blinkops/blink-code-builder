@@ -94,11 +94,13 @@ A hook can't call an MCP tool, so some hooks ask you to call one and others proc
 | Every user message | `check_setup.py` | Tells the user how to sign in, or asks you to fetch missing data first. |
 | After `export_catalog` | `refresh_catalog.py --save` | Unzips the catalog to disk. You see a one-line status. |
 | After `get_workspace_resources` | `refresh_workspace.py --save` | Writes the workspace lists and the table schemas. You see a one-line status. |
-| After `fetch_automation` / `fetch_agent` | `save_fetched.py` | Writes the YAML to the local workflow or agent file. You get the path and the id, not the YAML. |
+| After `fetch_automation` / `fetch_agent` | `save_fetched.py` | Writes the YAML to the local workflow or agent file. You get the path and the id, not the YAML, plus the output each mocked step returns now. |
 | After `fetch_dashboard` / `save_dashboard` | `save_fetched.py` | Writes the dashboard to the local dashboard file, with the new widget ids after a save. |
-| Before `save_automation` | `safety_gate.py pre` | Denies the save when an action is not in the catalog (likely a typo) or a connection key is not one of the action's `connection_types`. The reason names the steps: fix them and save again. |
-| After `save_automation` / `save_agent` | `safety_gate.py post` | Records the risks of the saved YAML. For an automation, adds the test-run readiness: the steps that still have no connection. |
-| Before `trigger_test_run` | `safety_gate.py pre` | Makes Claude Code ask the user only for a risk the user has not approved in a test run of this session, or whose step (or its loop) changed, or when the YAML was not saved through this plugin. Otherwise it gives no decision and the user's permission mode decides. |
+| Before `save_automation` | `safety_gate.py pre` | Denies the save when an action is not in the catalog (likely a typo) or a connection key is not one of the action's `connection_types`. The reason names the steps: fix them and save again. Asks the user when a step has `allow_mock_in_prod: true`. |
+| After `save_automation` / `save_agent` | `safety_gate.py post` | Records the risks and the mocked steps of the saved YAML. For an automation, adds the test-run readiness: the steps that still have no connection (a mocked step needs none). |
+| Before `trigger_test_run` | `safety_gate.py pre` | Makes Claude Code ask the user only for a risk the user has not approved in a test run of this session, or whose step (or its loop) changed, or when the YAML was not saved through this plugin. Otherwise it gives no decision and the user's permission mode decides. Mocked steps don't run in a test, so their risks are left out. |
+| After `trigger_test_run` | `safety_gate.py post` | Lists the mocked steps of the run: name them in your summary. |
+| Before `publish_automation` | `safety_gate.py pre` | Denies the publish when the saved YAML has mocked steps, and names them. Remove the mocks with the user's OK, save, test, then publish. |
 | After any publish | `refresh_workspace.py` | Asks you to call `get_workspace_resources`. |
 | Stop | `refresh_workspace.py --stop` | After a publish, or a save that created a dashboard, you can't end the turn until you call `get_workspace_resources` . |
 
@@ -113,6 +115,10 @@ To force a catalog refresh, the user deletes the catalog folder and starts a new
 - **`save_agent`** — pass the agent file's content as `yaml`, and `agent_id` to update.
 - **`save_dashboard`** — pass the dashboard file's content as the `dashboard` object. The hook
   rewrites the file with the new ids.
+- **`save_automation` with `mock_outputs`** — the fake data of mocked steps (`step_id`, `state`,
+  and `output` as a JSON object or text), saved with the YAML. See the MCP skill's `mock-outputs.md`.
+- **`trigger_test_run`** — pass `input_values` for the workflow's `inputs`, and `event` (`{"payload": {...}}`)
+  for a workflow that reads `{{ event.payload.* }}`.
 - **`fetch_automation` / `fetch_agent` / `fetch_dashboard`** — the hook writes the local file and
   returns its path and id. Read the file.
 - **`export_catalog` / `get_workspace_resources` / `list_workspaces`** — call them when a hook asks, or when the
@@ -123,9 +129,10 @@ To force a catalog refresh, the user deletes the catalog folder and starts a new
 - **Ask the user** with the AskUserQuestion tool when you offer choices (for example several
   matching connections, actions or Portal users: put the name and email in each option). Ask
   free-form questions in plain text.
-- **Approvals.** Only `trigger_test_run` has a hook: Claude Code asks the user when the hook finds a
-  new risk (see the hooks table). For every other tool that needs the user's approval in the MCP
-  skills (`publish_automation`, `publish_agent`, `publish_dashboard` with `confirm=true`,
+- **Approvals.** `trigger_test_run` has a hook: Claude Code asks the user when the hook finds a
+  new risk (see the hooks table). `publish_automation` has a hook only for mocked steps (it denies). For every
+  other tool that needs the user's approval in the MCP skills (`publish_automation` without mocked
+  steps, `publish_agent`, `publish_dashboard` with `confirm=true`,
   `delete_table`, `edit_table` with `remove_fields`), no hook asks: tell the user in plain words what
   will happen, get their yes in the chat, then call the tool. If the user declines, don't retry — ask
   what they want instead.
@@ -137,7 +144,7 @@ To force a catalog refresh, the user deletes the catalog folder and starts a new
 Give the user a clickable link to each Blink object you create, change, publish or run.
 
 - Workflows, agents and dashboards: copy the tool's `editor_url` exactly.
-- A test run: `<workflow editor_url>?execution=<execution_id>`.
+- A test run: `<workflow editor_url>?execution=<execution_id>`. Copy the `editor_url` string from the tool result and append the id; never type the host or the ids yourself.
 - A table: `<Blink URL>/workspace/<workspace id>/tables/<table id>` (`id` in `tables-schema.yaml`).
 - A dashboard in the Portal: `<Blink URL>/portal/app/<dashboard id>`.
 

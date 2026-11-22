@@ -39,6 +39,8 @@ TOOL_TIMEOUT_MS = 300_000
 # blinkmcp calls the tenant's own controller (https://<subdomain>.<domain>), so every request
 # names the tenant. The runtime's requestHeaderAllowlist passes this header through.
 SUBDOMAIN_HEADER = "Blink-Subdomain"
+TOOLSETS_HEADER = "X-MCP-Toolsets"
+TOOLSETS = "builder"
 
 
 @dataclass(frozen=True)
@@ -96,10 +98,11 @@ def server_config(target: Route) -> dict:
             "scopes": OAUTH_SCOPES,
         },
         "timeout": TOOL_TIMEOUT_MS,
+        "headers": {TOOLSETS_HEADER: TOOLSETS},
     }
-    # A tenant on the bare domain has no subdomain, so the server gets no header.
+    # A tenant on the bare domain has no subdomain, so the server gets no subdomain header.
     if target.subdomain:
-        config["headers"] = {SUBDOMAIN_HEADER: target.subdomain}
+        config["headers"][SUBDOMAIN_HEADER] = target.subdomain
     return config
 
 
